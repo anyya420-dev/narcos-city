@@ -6,7 +6,9 @@ const DISTRICT_LAYOUT = {
   harbor: { x: 34, z: -16 },
   industrial: { x: 40, z: 26 },
   "rich-district": { x: -40, z: 28 },
-  underground: { x: 0, z: 42 }
+  underground: { x: 0, z: 42 },
+  residential: { x: -2, z: -42 },
+  "safehouse-area": { x: 26, z: 46 }
 };
 
 const LOCATION_OFFSETS = [
@@ -76,7 +78,19 @@ export function buildWorldModel(state, districts = DISTRICTS, locations = LOCATI
         height,
         door,
         prompt: `Enter ${data.name}`,
-        interactionType: "door"
+        interactionType: "door",
+        districtName: district.name,
+        enterable: ["safehouse", "bank", "luxury-club", "underground-club", "safehouse-compound"].includes(locationId),
+        locationType:
+          locationId.includes("club") || locationId.includes("venue")
+            ? "nightlife"
+            : locationId.includes("bank")
+              ? "finance"
+              : locationId.includes("safehouse")
+                ? "safehouse"
+                : locationId.includes("garage")
+                  ? "garage"
+                  : "business"
       };
       buildings.push(node);
       locationNodes[locationId] = node;
@@ -170,7 +184,9 @@ export function getInteractables(model) {
     x: entry.door.x,
     z: entry.door.z,
     prompt: entry.prompt,
-    interactionType: "door"
+    interactionType: "door",
+    enterable: entry.enterable,
+    locationType: entry.locationType
   }));
 
   return [...doors, ...model.npcs, ...model.vehicles, ...model.districtMarkers];

@@ -55,12 +55,16 @@ import {
   useInventoryItem
 } from "./gameLogic.mjs";
 import { mountCityWorld3d } from "./cityWorld3d.js";
+import { createDistrictAnchors } from "./cityWorldFoundation.mjs";
+import { createAudioManager } from "./audioManager.mjs";
 
-const STORAGE_KEY = "narcos-city-state-v4";
+const STORAGE_KEY = "narcos-city-state-v5";
+const APP_SETTINGS_KEY = "narcos-city-settings-v1";
+const LOADING_MS = 900;
 
 function loadState() {
   try {
-    const saved = localStorage.getItem(STORAGE_KEY);
+    const saved = localStorage.getItem(STORAGE_KEY) || localStorage.getItem("narcos-city-state-v4");
     return saved ? normalizeState(JSON.parse(saved)) : createInitialState();
   } catch {
     return createInitialState();
@@ -68,13 +72,29 @@ function loadState() {
 }
 
 let state = loadState();
+try {
+  const savedSettings = JSON.parse(localStorage.getItem(APP_SETTINGS_KEY) || "null");
+  if (savedSettings && typeof savedSettings === "object") {
+    state.settings = { ...state.settings, ...savedSettings };
+  }
+} catch {
+  // Ignore.
+}
 const root = document.getElementById("screen-root");
 const nav = document.getElementById("bottom-nav");
 const statusBar = document.getElementById("status-bar");
+const audio = createAudioManager();
 let cityWorldSession = null;
+let loading = true;
+let startedFromMenu = false;
 
 function persist() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    localStorage.setItem(APP_SETTINGS_KEY, JSON.stringify(state.settings));
+  } catch {
+    // Ignore storage denial and keep current runtime state.
+  }
 }
 
 function currency(v) {
@@ -125,6 +145,8 @@ function renderStatus() {
       <div><span>Cash / Bank</span><strong>${currency(state.player.money)} / ${currency(state.player.bankBalance)}</strong></div>
       <div><span>Energy</span><strong>${state.player.energy}</strong></div>
       <div><span>Health</span><strong>${state.player.health}</strong></div>
+      <div><span>Respect / Influence</span><strong>${state.player.respect || 0} / ${state.player.influence}</strong></div>
+      <div><span>Status</span><strong>${escapeHtml(state.player.status || "Active")}</strong></div>
       <div><span>Wanted</span><strong>${state.player.wantedLevel}/5</strong></div>
       <div><span>Rep Total</span><strong>${totalRep}</strong></div>
       <div><span>District</span><strong>${escapeHtml(district.name)}</strong></div>
@@ -150,10 +172,98 @@ function renderSetup() {
   `;
 }
 
+function renderLoading() {
+  root.innerHTML = `
+    <section class="card marble loading-card">
+      <h2>NARCOS CITY</h2>
+      <p class="muted">Empire of Silk, Steel, and Shadows</p>
+      <div class="loading-line"><span></span></div>
+    </section>
+  `;
+}
+
+function renderMainMenu() {
+  const hasSave = !!state?.meta?.hasCreatedCharacter;
+  root.innerHTML = `
+    <section class="card marble menu-card">
+      <h2>NARCOS CITY</h2>
+      <p class="muted">Empire of Silk, Steel, and Shadows</p>
+      <div class="actions menu-actions">
+        <button data-action="menu-new-game">PLAY</button>
+        <button data-action="menu-continue" ${hasSave ? "" : "disabled"}>CONTINUE</button>
+        <button data-action="menu-profile">PROFILE</button>
+        <button data-action="menu-settings">SETTINGS</button>
+      </div>
+    </section>
+    ${
+      !state.meta.hasCreatedCharacter
+        ? `<section class="card">
+        <h3>Create Character</h3>
+        <p class="muted">Start as La Reina · Queen · Active</p>
+        <label class="field">
+          <span>Character Name</span>
+          <input id="player-name-input" maxlength="24" value="${escapeHtml(state.player.name || "La Reina")}" />
+        </label>
+        <div class="actions">
+          <button data-action="create-player">Enter City</button>
+        </div>
+      </section>`
+        : ""
+    }
+  `;
+}
+
+function renderSettings() {
+  const s = state.settings || {};
+  root.innerHTML = `
+    <section class="card marble">
+      <h2>Settings</h2>
+      <p class="muted">Tune performance and control feel for mobile play.</p>
+      <label class="field"><span>Graphics Quality</span>
+        <select id="setting-graphics">
+          <option value="low" ${s.graphicsQuality === "low" ? "selected" : ""}>LOW</option>
+          <option value="medium" ${s.graphicsQuality === "medium" ? "selected" : ""}>MEDIUM</option>
+          <option value="high" ${s.graphicsQuality === "high" ? "selected" : ""}>HIGH</option>
+        </select>
+      </label>
+      <label class="field"><span>Controls Sensitivity (${Number(s.controlsSensitivity || 1).toFixed(2)})</span>
+        <input id="setting-controls" type="range" min="0.6" max="1.8" step="0.05" value="${s.controlsSensitivity || 1}" />
+      </label>
+      <label class="field"><span>Camera Sensitivity (${Number(s.cameraSensitivity || 1).toFixed(2)})</span>
+        <input id="setting-camera" type="range" min="0.6" max="1.8" step="0.05" value="${s.cameraSensitivity || 1}" />
+      </label>
+      <div class="actions">
+        <button data-action="toggle-sound">${s.soundEnabled ? "Sound: ON" : "Sound: OFF"}</button>
+        <button data-action="toggle-music">${s.musicEnabled ? "Music: ON" : "Music: OFF"}</button>
+        <button data-action="save-settings">Save Settings</button>
+      </div>
+    </section>
+  `;
+}
+
 function renderEventPanel() {
   const event = state.meta.pendingEvent;
   if (!event) {
     return `<section class="card"><h3>Event</h3><p class="muted">No active event choices.</p></section>`;
+  }
+
+  function renderDistrictMap() {
+    const anchors = createDistrictAnchors(state.districts);
+    const entries = state.districts
+      .map((district) => {
+        const anchor = anchors[district.id] || { x: 0, z: 0 };
+        const x = 120 + anchor.x * 2;
+        const y = 120 + anchor.z * 2;
+        const active = district.id === state.selectedDistrictId;
+        return `<button class="district-map-point ${active ? "active" : ""}" data-action="travel" data-district-id="${district.id}" style="left:${x}px;top:${y}px;">${escapeHtml(
+          district.name
+        )}</button>`;
+      })
+      .join("");
+    return `<section class="card">
+      <h3>City Map</h3>
+      <div class="district-map">${entries}</div>
+    </section>`;
   }
   const choices = event.choices
     .map((choice) => `<button data-action="event-choice" data-choice-id="${choice.id}">${escapeHtml(choice.label)}</button>`)
@@ -219,6 +329,12 @@ function renderCity() {
     <section class="card marble">
       <h2>Third-Person City World</h2>
       <p class="muted">Walk physically through the district. Use ACTION near doors, NPCs, vehicles, and district markers.</p>
+      ${
+        state.world?.currentInteriorId
+          ? `<p class="muted">Interior: ${escapeHtml(LOCATIONS[state.world.currentInteriorId]?.name || state.world.currentInteriorId)}</p>
+             <div class="actions"><button data-action="exit-interior">Exit Interior</button></div>`
+          : ""
+      }
       <div id="city-world-3d-container" class="city-world-3d-container"></div>
     </section>
     <section class="card marble">
@@ -250,10 +366,20 @@ function renderCity() {
   cityWorldSession = mountCityWorld3d({
     container: worldContainer,
     state,
+    settings: state.settings,
     onInteract: (target) => {
       if (!target) return;
+      if (state.settings?.soundEnabled) audio.interact();
+
+      if (target.interactionType === "interior-exit") {
+        state.world.currentInteriorId = null;
+        persist();
+        render();
+        return;
+      }
 
       if (target.interactionType === "district-marker") {
+        state.world.currentInteriorId = null;
         travelToDistrict(state, target.id);
       }
 
@@ -263,10 +389,12 @@ function renderCity() {
         }
         if ((target.districtId || state.selectedDistrictId) === state.selectedDistrictId) {
           moveToLocation(state, target.districtId || state.selectedDistrictId, target.id);
+          state.world.currentInteriorId = target.enterable ? target.id : null;
         }
       }
 
       if (target.interactionType === "npc") {
+        state.world.currentInteriorId = null;
         if (target.districtId !== state.selectedDistrictId) {
           travelToDistrict(state, target.districtId);
         }
@@ -279,6 +407,7 @@ function renderCity() {
       }
 
       if (target.interactionType === "vehicle") {
+        state.world.currentInteriorId = null;
         const owned = state.vehicles.find((entry) => entry.id === target.id)?.owned;
         if (owned) {
           state.player.currentVehicleId = target.id;
@@ -326,6 +455,7 @@ function renderDistricts() {
       <h2>District Network</h2>
       <p class="muted">Travel reshapes reputation, risk, and opportunities.</p>
     </section>
+    ${renderDistrictMap()}
     ${cards}
   `;
 }
@@ -681,24 +811,43 @@ function render() {
   void root.offsetWidth;
   root.classList.add("screen-enter");
 
-  nav.querySelectorAll("button").forEach((button) => {
-    button.classList.toggle("active", button.dataset.screen === state.currentScreen);
-    button.disabled = !state.meta.hasCreatedCharacter;
-  });
-
-  if (!state.meta.hasCreatedCharacter) {
+  if (loading) {
+    nav.style.display = "none";
     if (cityWorldSession) {
       cityWorldSession.destroy();
       cityWorldSession = null;
     }
     renderStatus();
-    renderSetup();
+    renderLoading();
+    return;
+  }
+
+  const navVisible = state.meta.hasCreatedCharacter && ["city", "districts", "profile", "inventory", "quests", "settings"].includes(state.currentScreen);
+  nav.style.display = navVisible ? "grid" : "none";
+  nav.querySelectorAll("button").forEach((button) => {
+    button.classList.toggle("active", button.dataset.screen === state.currentScreen);
+    button.disabled = !state.meta.hasCreatedCharacter && button.dataset.screen !== "settings";
+  });
+
+  if (!state.meta.hasCreatedCharacter && state.currentScreen !== "settings") {
+    if (cityWorldSession) {
+      cityWorldSession.destroy();
+      cityWorldSession = null;
+    }
+    renderStatus();
+    renderMainMenu();
     return;
   }
 
   renderStatus();
 
   switch (state.currentScreen) {
+    case "main-menu":
+      renderMainMenu();
+      break;
+    case "settings":
+      renderSettings();
+      break;
     case "districts":
       renderDistricts();
       break;
@@ -727,6 +876,7 @@ nav.addEventListener("click", (event) => {
 root.addEventListener("click", (event) => {
   const button = event.target.closest("button[data-action]");
   if (!button) return;
+  if (state.settings?.soundEnabled) audio.button();
 
   const {
     action,
@@ -754,13 +904,60 @@ root.addEventListener("click", (event) => {
   if (action === "create-player") {
     const input = document.getElementById("player-name-input");
     createPlayer(state, input?.value || "");
-    if (state.meta.hasCreatedCharacter) navigateTo(state, "city");
+    if (state.meta.hasCreatedCharacter) {
+      startedFromMenu = true;
+      navigateTo(state, "city");
+    }
     persist();
     render();
     return;
   }
 
-  if (!state.meta.hasCreatedCharacter) return;
+  if (action === "menu-new-game") {
+    startedFromMenu = true;
+    if (state.meta.hasCreatedCharacter) {
+      state = resetGame();
+    }
+    navigateTo(state, "main-menu");
+    persist();
+    render();
+    return;
+  }
+  if (action === "menu-continue") {
+    startedFromMenu = true;
+    navigateTo(state, "city");
+    persist();
+    render();
+    return;
+  }
+  if (action === "menu-profile") {
+    if (state.meta.hasCreatedCharacter) navigateTo(state, "profile");
+    persist();
+    render();
+    return;
+  }
+  if (action === "menu-settings") {
+    navigateTo(state, "settings");
+    persist();
+    render();
+    return;
+  }
+
+  if (action === "toggle-sound") state.settings.soundEnabled = !state.settings.soundEnabled;
+  if (action === "toggle-music") state.settings.musicEnabled = !state.settings.musicEnabled;
+  if (action === "save-settings") {
+    const controlsSensitivity = Number(document.getElementById("setting-controls")?.value || state.settings.controlsSensitivity || 1);
+    const cameraSensitivity = Number(document.getElementById("setting-camera")?.value || state.settings.cameraSensitivity || 1);
+    const graphicsQuality = document.getElementById("setting-graphics")?.value || state.settings.graphicsQuality || "medium";
+    state.settings.controlsSensitivity = Math.max(0.6, Math.min(1.8, controlsSensitivity));
+    state.settings.cameraSensitivity = Math.max(0.6, Math.min(1.8, cameraSensitivity));
+    state.settings.graphicsQuality = ["low", "medium", "high"].includes(graphicsQuality) ? graphicsQuality : "medium";
+    persist();
+    render();
+    return;
+  }
+
+  if (!state.meta.hasCreatedCharacter && !["settings", "main-menu"].includes(state.currentScreen)) return;
 
   if (action === "travel") travelToDistrict(state, districtId);
   if (action === "enter-location") moveToLocation(state, districtId, locationId);
@@ -790,6 +987,7 @@ root.addEventListener("click", (event) => {
   if (action === "casino-play") casinoPlay(state, game, 150);
   if (action === "claim-daily") claimDailyReward(state);
   if (action === "claim-daily-quest") claimDailyQuestReward(state, questId);
+  if (action === "exit-interior") state.world.currentInteriorId = null;
   if (action === "event-choice") chooseEventChoice(state, choiceId);
   if (action === "mark-note") markNotificationRead(state, noteId);
   if (action === "mark-all-notes") markAllNotificationsRead(state);
@@ -828,3 +1026,10 @@ if (localStorage.getItem("narcos-city-debug") === "1") {
 }
 
 render();
+window.setTimeout(() => {
+  loading = false;
+  if (!startedFromMenu) {
+    navigateTo(state, "main-menu");
+  }
+  render();
+}, LOADING_MS);

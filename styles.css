@@ -171,7 +171,8 @@ main:not(.screen-enter) {
 }
 
 button,
-input {
+input,
+select {
   border-radius: 10px;
   font: inherit;
 }
@@ -210,13 +211,21 @@ input {
   padding: 0.62rem 0.68rem;
 }
 
+select {
+  width: 100%;
+  border: 1px solid rgba(170, 176, 189, 0.34);
+  background: rgba(0, 0, 0, 0.35);
+  color: var(--ink);
+  padding: 0.62rem 0.68rem;
+}
+
 .bottom-nav {
   position: fixed;
   left: 0;
   right: 0;
   bottom: 0;
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 0.34rem;
   padding: 0.55rem 0.55rem calc(0.55rem + env(safe-area-inset-bottom, 0px));
   border-top: 1px solid rgba(181, 154, 95, 0.22);
@@ -227,7 +236,7 @@ input {
   border-color: rgba(170, 176, 189, 0.3);
   padding: 0.48rem 0.2rem;
   min-height: 40px;
-  font-size: 0.68rem;
+  font-size: 0.63rem;
 }
 
 .bottom-nav button.active {
@@ -392,6 +401,71 @@ input {
 .world-button.run.active {
   border-color: var(--ok);
   color: var(--ok);
+}
+
+.loading-card {
+  text-align: center;
+  margin-top: 10vh;
+}
+
+.loading-line {
+  margin-top: 0.8rem;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.loading-line span {
+  display: block;
+  width: 30%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, var(--gold), transparent);
+  animation: loading-sweep 1.2s linear infinite;
+}
+
+.menu-actions {
+  justify-content: center;
+}
+
+.menu-actions button {
+  min-width: 122px;
+}
+
+.district-map {
+  position: relative;
+  height: 240px;
+  border-radius: 12px;
+  border: 1px solid rgba(170, 176, 189, 0.18);
+  background:
+    radial-gradient(circle at 15% 25%, rgba(181, 154, 95, 0.14), transparent 35%),
+    radial-gradient(circle at 80% 70%, rgba(70, 24, 40, 0.24), transparent 30%),
+    rgba(8, 9, 12, 0.75);
+  overflow: hidden;
+}
+
+.district-map-point {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  min-height: 26px;
+  font-size: 0.6rem;
+  padding: 0.18rem 0.42rem;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.district-map-point.active {
+  border-color: var(--gold);
+  color: var(--gold);
+}
+
+@keyframes loading-sweep {
+  0% {
+    transform: translateX(-120%);
+  }
+  100% {
+    transform: translateX(360%);
+  }
 }
 
 @media (min-width: 700px) {

@@ -17,6 +17,7 @@ test("district anchors include canonical districts", () => {
   assert.ok(anchors.downtown);
   assert.ok(anchors["old-town"]);
   assert.ok(anchors.harbor);
+  assert.ok(anchors.residential);
 });
 
 test("world model builds buildings, npcs, and vehicles", () => {

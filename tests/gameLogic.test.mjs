@@ -32,10 +32,12 @@ import {
 
 test("initial state has stage2 structures", () => {
   const state = createInitialState();
-  assert.equal(state.meta.saveVersion, 4);
-  assert.equal(state.districts.length, 6);
+  assert.equal(state.meta.saveVersion, 5);
+  assert.ok(state.districts.length >= 8);
   assert.ok(state.marketCatalog.length >= 10);
   assert.equal(state.player.wantedLevel, 0);
+  assert.ok(state.player.money >= 10000);
+  assert.equal(state.player.title, "Queen");
   assert.ok(Array.isArray(state.transactions));
   assert.ok(Array.isArray(state.jobs));
   assert.ok(Array.isArray(state.crimeOperations));
@@ -136,7 +138,7 @@ test("normalize migrates old saves and keeps safe defaults", () => {
   const migrated = normalizeState({ player: { name: "Old", money: 200 }, time: { day: 3, turn: 2 }, inventory: [{ id: "medkit", quantity: 1 }] });
   assert.equal(migrated.player.name, "Old");
   assert.equal(typeof migrated.inventory, "object");
-  assert.ok(migrated.meta.saveVersion === 4);
+  assert.ok(migrated.meta.saveVersion === 5);
 });
 
 test("safehouse rest restores resources and advances time", () => {

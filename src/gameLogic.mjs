@@ -243,6 +243,8 @@ function getQuestMetric(state, objective) {
       return state.statistics.locationsVisited.includes(target) ? 1 : 0;
     case "travel-to-district":
       return state.statistics.travelHistory.filter((entry) => entry === target).length;
+    case "districts-visited":
+      return state.statistics.districtsVisited.length;
     case "talk-to-npc":
       if (target === "any") return state.statistics.npcsMet.length;
       return state.statistics.npcInteractionCount[target] || 0;
@@ -326,6 +328,8 @@ function getAchievementMetric(state, requirement) {
   switch (requirement.type) {
     case "districts-visited":
       return state.statistics.districtsVisited.length;
+    case "visit-location":
+      return state.statistics.locationsVisited.includes(requirement.target) ? 1 : 0;
     case "money-earned":
       return state.statistics.moneyEarned;
     case "city-reputation":
@@ -607,19 +611,19 @@ export function createInitialState() {
   );
 
   const state = {
-    currentScreen: "city",
+    currentScreen: "main-menu",
     selectedDistrictId: firstDistrict.id,
     currentLocationId: firstLocationId,
     day: 1,
     turn: 1,
     player: {
-      name: "",
+      name: "La Reina",
       title: TITLE_RANKS[0].name,
       level: 1,
       xp: 0,
       totalXp: 0,
       nextLevelXp: BALANCE.xpBasePerLevel,
-      money: 1000,
+      money: 10000,
       bankBalance: 0,
       health: 100,
       energy: 100,
@@ -629,7 +633,9 @@ export function createInitialState() {
         business: 0,
         faction: 0
       },
-      influence: 0,
+      influence: 5,
+      respect: 10,
+      status: "Active",
       strength: 10,
       intelligence: 10,
       charisma: 10,
@@ -759,6 +765,16 @@ export function createInitialState() {
       lastEvent: null,
       pendingEvent: null,
       debugMode: false
+    },
+    world: {
+      currentInteriorId: null
+    },
+    settings: {
+      soundEnabled: true,
+      musicEnabled: true,
+      graphicsQuality: "medium",
+      controlsSensitivity: 1,
+      cameraSensitivity: 1
     }
   };
 
@@ -795,7 +811,9 @@ function migrateState(rawState) {
     premium: { ...base.premium, ...rawState.premium },
     admin: { ...base.admin, ...rawState.admin },
     meta: { ...base.meta, ...rawState.meta },
-    statistics: { ...base.statistics, ...rawState.statistics }
+    statistics: { ...base.statistics, ...rawState.statistics },
+    world: { ...base.world, ...rawState.world },
+    settings: { ...base.settings, ...rawState.settings }
   };
 
   merged.districts = Array.isArray(rawState.districts) ? rawState.districts : clone(DISTRICTS);
@@ -839,6 +857,8 @@ function migrateState(rawState) {
   merged.player.currentDistrict = merged.selectedDistrictId;
   merged.player.currentLocation = merged.currentLocationId;
   merged.player.currentVehicleId = merged.player.currentVehicleId || getCurrentVehicle(merged).id;
+  merged.player.respect = Number.isFinite(merged.player.respect) ? merged.player.respect : 10;
+  merged.player.status = merged.player.status || "Active";
   merged.player.completedQuests = Array.isArray(merged.player.completedQuests) ? merged.player.completedQuests : [];
   merged.player.money = Math.max(0, merged.player.money || merged.player.wallet || 0);
   merged.player.bankBalance = Math.max(0, merged.player.bankBalance || 0);
@@ -872,11 +892,7 @@ export function normalizeState(rawState) {
 
 export function createPlayer(state, name) {
   const clean = String(name || "").trim();
-  if (!clean) {
-    addNotification(state, "System", "Enter a valid character name.", "error");
-    return state;
-  }
-  state.player.name = clean.slice(0, 24);
+  state.player.name = (clean || state.player.name || "La Reina").slice(0, 24);
   state.meta.hasCreatedCharacter = true;
   state.player.currentDistrict = state.selectedDistrictId;
   state.player.currentLocation = state.currentLocationId;
@@ -892,7 +908,7 @@ export function resetGame() {
 }
 
 export function navigateTo(state, screen) {
-  const allowed = ["city", "districts", "profile", "inventory", "quests"];
+  const allowed = ["main-menu", "city", "districts", "profile", "inventory", "quests", "settings"];
   state.currentScreen = allowed.includes(screen) ? screen : "city";
   return state;
 }
@@ -1749,6 +1765,7 @@ export function inspectStorage(state) {
 
 export function returnToCity(state) {
   state.currentScreen = "city";
+  if (state.world) state.world.currentInteriorId = null;
   addNotification(state, "System", "Returned to city overview.", "info");
   return state;
 }

@@ -1,4 +1,4 @@
-export const SAVE_VERSION = 4;
+export const SAVE_VERSION = 5;
 export const TURNS_PER_DAY = 8;
 
 export const BALANCE = {
@@ -62,7 +62,7 @@ export const BALANCE = {
 };
 
 export const TITLE_RANKS = [
-  { id: "newcomer", name: "Newcomer", level: 1, xpTotal: 0, influence: 0, reputation: 0, streetReputation: 0 },
+  { id: "queen", name: "Queen", level: 1, xpTotal: 0, influence: 0, reputation: 0, streetReputation: 0 },
   { id: "resident", name: "Resident", level: 2, xpTotal: 120, influence: 10, reputation: 8, streetReputation: 6 },
   { id: "street-player", name: "Street Player", level: 3, xpTotal: 280, influence: 18, reputation: 15, streetReputation: 12 },
   { id: "influencer", name: "Influencer", level: 4, xpTotal: 460, influence: 28, reputation: 24, streetReputation: 20 },
@@ -136,7 +136,7 @@ export const DISTRICTS = [
   },
   {
     id: "rich-district",
-    name: "RICH DISTRICT",
+    name: "LUXURY DISTRICT",
     description: "Private clubs and estates where influence is currency.",
     atmosphere: "Velvet luxury with strict gatekeepers.",
     dangerLevel: 2,
@@ -151,7 +151,7 @@ export const DISTRICTS = [
   },
   {
     id: "underground",
-    name: "UNDERGROUND",
+    name: "NIGHTLIFE DISTRICT",
     description: "Hidden clubs, fixers, and faction headquarters.",
     atmosphere: "Dark prestige with constant risk.",
     dangerLevel: 5,
@@ -163,6 +163,36 @@ export const DISTRICTS = [
     npcs: ["npc-fixer-1", "npc-underground-contact-1", "npc-nightclub-owner-1"],
     randomEvents: ["event-faction-offer", "event-ambush"],
     availableQuests: ["story-09", "story-10", "quest-faction-standing"]
+  },
+  {
+    id: "residential",
+    name: "RESIDENTIAL DISTRICT",
+    description: "Apartments, family blocks, and low-profile side streets.",
+    atmosphere: "Quiet routines with local influence beneath the surface.",
+    dangerLevel: 2,
+    wealthLevel: 2,
+    reputationRequirement: 6,
+    travelCost: 78,
+    travelTime: 1,
+    locations: ["residential-hub", "community-center", "market", "safehouse"],
+    npcs: ["npc-street-trader-1", "npc-hotel-manager-1"],
+    randomEvents: ["event-citizen-help", "event-friendly-tip"],
+    availableQuests: ["quest-make-contact"]
+  },
+  {
+    id: "safehouse-area",
+    name: "SAFEHOUSE AREA",
+    description: "Defensible blocks built around trusted homes and fallback routes.",
+    atmosphere: "Controlled access, secure storage, and strategic calm.",
+    dangerLevel: 3,
+    wealthLevel: 3,
+    reputationRequirement: 10,
+    travelCost: 88,
+    travelTime: 1,
+    locations: ["safehouse-compound", "training-yard", "garage", "warehouse"],
+    npcs: ["npc-underground-contact-1", "npc-security-boss-1"],
+    randomEvents: ["event-police-check", "event-business-opportunity"],
+    availableQuests: ["quest-tools-up"]
   }
 ];
 
@@ -478,6 +508,62 @@ export const LOCATIONS = {
     npcs: ["npc-faction-member-2"],
     rewards: { factionReputation: 3 },
     possibleEvents: ["event-faction-offer", "event-police-check"]
+  },
+  "residential-hub": {
+    id: "residential-hub",
+    districtId: "residential",
+    name: "Residential Hub",
+    description: "Apartment lanes, local cafés, and neighborhood contacts.",
+    requirements: { cityReputation: 4 },
+    actions: [
+      { id: "residential-patrol", name: "Neighborhood Patrol", type: "city-action", reward: { cityReputation: 2 }, energyCost: 4, xpGain: 12 },
+      { id: "residential-delivery", name: "Courier Delivery", type: "work", reward: { cash: 210, streetReputation: 1 }, energyCost: 5, xpGain: 13 }
+    ],
+    npcs: ["npc-hotel-manager-1"],
+    rewards: { cityReputation: 1 },
+    possibleEvents: ["event-citizen-help", "event-friendly-tip"]
+  },
+  "community-center": {
+    id: "community-center",
+    districtId: "residential",
+    name: "Community Center",
+    description: "Local services, civic requests, and trusted introductions.",
+    requirements: { cityReputation: 5 },
+    actions: [
+      { id: "community-help", name: "Help Residents", type: "city-action", reward: { cityReputation: 2, relationship: 1 }, energyCost: 5, xpGain: 14 },
+      { id: "community-fund", name: "Support Fundraiser", type: "social", cost: 120, reward: { influence: 1, cityReputation: 1 }, energyCost: 3, xpGain: 10 }
+    ],
+    npcs: ["npc-journalist-1"],
+    rewards: { cityReputation: 1 },
+    possibleEvents: ["event-friendly-tip"]
+  },
+  "safehouse-compound": {
+    id: "safehouse-compound",
+    districtId: "safehouse-area",
+    name: "Safehouse Compound",
+    description: "Reinforced home base with storage and tactical planning room.",
+    requirements: { cityReputation: 8 },
+    actions: [
+      { id: "compound-rest", name: "Deep Rest", type: "rest", reward: { energy: 45, health: 24 }, energyCost: 0, xpGain: 12 },
+      { id: "compound-save", name: "Secure Operations", type: "city-action", reward: { influence: 1, cityReputation: 1 }, energyCost: 1, xpGain: 8 }
+    ],
+    npcs: ["npc-underground-contact-1"],
+    rewards: { cityReputation: 1 },
+    possibleEvents: ["event-friendly-tip"]
+  },
+  "training-yard": {
+    id: "training-yard",
+    districtId: "safehouse-area",
+    name: "Training Yard",
+    description: "Controlled zone for drills and faction preparation.",
+    requirements: { streetReputation: 8 },
+    actions: [
+      { id: "training-drill", name: "Combat Drill", type: "work", reward: { cash: 180, streetReputation: 2 }, energyCost: 6, xpGain: 16 },
+      { id: "training-strategy", name: "Strategy Session", type: "faction-action", reward: { factionReputation: 2, intelligence: 1 }, energyCost: 5, xpGain: 15 }
+    ],
+    npcs: ["npc-security-boss-1"],
+    rewards: { streetReputation: 1 },
+    possibleEvents: ["event-labor-deal", "event-ambush"]
   }
 };
 
@@ -523,15 +609,17 @@ export const BUSINESSES = [
   { id: "biz-restaurant", name: "Restaurant", type: "Restaurant", purchasePrice: 22000, income: 1450, expenses: 520, reputation: 0, level: 1, employees: 5, owned: false, lastCollectedDay: 0 },
   { id: "biz-garage", name: "Garage", type: "Garage", purchasePrice: 19000, income: 1200, expenses: 460, reputation: 0, level: 1, employees: 4, owned: false, lastCollectedDay: 0 },
   { id: "biz-casino", name: "Casino", type: "Casino", purchasePrice: 52000, income: 3200, expenses: 1200, reputation: 0, level: 1, employees: 10, owned: false, lastCollectedDay: 0 },
-  { id: "biz-security", name: "Security Company", type: "Security Company", purchasePrice: 26000, income: 1500, expenses: 620, reputation: 0, level: 1, employees: 5, owned: false, lastCollectedDay: 0 }
+  { id: "biz-security", name: "Security Company", type: "Security Company", purchasePrice: 26000, income: 1500, expenses: 620, reputation: 0, level: 1, employees: 5, owned: false, lastCollectedDay: 0 },
+  { id: "biz-warehouse", name: "Warehouse", type: "Warehouse", purchasePrice: 24000, income: 1650, expenses: 640, reputation: 0, level: 1, employees: 5, owned: false, lastCollectedDay: 0 },
+  { id: "biz-luxury-shop", name: "Luxury Shop", type: "Luxury Shop", purchasePrice: 30000, income: 2100, expenses: 820, reputation: 0, level: 1, employees: 6, owned: false, lastCollectedDay: 0 }
 ];
 
 export const FACTIONS = [
-  { id: "royals", name: "The Royals", description: "High society bloc controlling elite contracts.", influence: 80, reputation: 0, members: ["npc-investor-2", "npc-security-boss-2"], headquarters: "faction-headquarters" },
-  { id: "black-harbor", name: "Black Harbor", description: "Dock authority in all but name.", influence: 66, reputation: 0, members: ["npc-faction-member-1", "npc-mechanic-1"], headquarters: "docks" },
-  { id: "velvet-syndicate", name: "Velvet Syndicate", description: "Luxury-night influence network.", influence: 72, reputation: 0, members: ["npc-nightclub-owner-1", "npc-casino-manager-1"], headquarters: "luxury-club" },
-  { id: "iron-wolves", name: "Iron Wolves", description: "Industrial enforcers and security operators.", influence: 64, reputation: 0, members: ["npc-security-boss-1", "npc-faction-member-2"], headquarters: "factory" },
-  { id: "old-guard", name: "Old Guard", description: "Traditionalists with deep political ties.", influence: 70, reputation: 0, members: ["npc-banker-1", "npc-journalist-1"], headquarters: "bank" }
+  { id: "royals", name: "Old Money", description: "Generational capital controlling elite contracts.", influence: 80, reputation: 0, members: ["npc-investor-2", "npc-security-boss-2"], headquarters: "faction-headquarters" },
+  { id: "black-harbor", name: "Harbor Crew", description: "Dock authority in all but name.", influence: 66, reputation: 0, members: ["npc-faction-member-1", "npc-mechanic-1"], headquarters: "docks" },
+  { id: "velvet-syndicate", name: "Black Roses", description: "Luxury-night influence network.", influence: 72, reputation: 0, members: ["npc-nightclub-owner-1", "npc-casino-manager-1"], headquarters: "luxury-club" },
+  { id: "iron-wolves", name: "The Kings", description: "Industrial enforcers and security operators.", influence: 64, reputation: 0, members: ["npc-security-boss-1", "npc-faction-member-2"], headquarters: "factory" },
+  { id: "old-guard", name: "La Familia", description: "Traditionalists with deep political ties.", influence: 70, reputation: 0, members: ["npc-banker-1", "npc-journalist-1"], headquarters: "bank" }
 ];
 
 export const NPCS = [
@@ -788,6 +876,22 @@ export const RELATIONSHIP_STATUSES = [
 ];
 
 export const QUESTS = [
+  {
+    id: "story-queen-arrives",
+    title: "THE QUEEN ARRIVES",
+    description: "Leave Downtown, explore the city, visit Nightlife District, and return to the Safehouse.",
+    category: "story",
+    chapter: "THE CITY KNOWS YOUR NAME",
+    requirements: { hasCreatedCharacter: true },
+    objectives: [
+      { id: "leave-start", type: "travel-to-district", target: "old-town", required: 1 },
+      { id: "explore-city", type: "districts-visited", target: "all", required: 3 },
+      { id: "visit-nightlife", type: "travel-to-district", target: "underground", required: 1 },
+      { id: "safehouse-return", type: "visit-location", target: "safehouse", required: 1 }
+    ],
+    rewards: { cash: 750, xp: 55, cityReputation: 2, influence: 2 },
+    status: "active"
+  },
   {
     id: "story-01",
     title: "Arrival in NARCOS CITY",
@@ -1129,6 +1233,11 @@ export const EVENTS = [
 ];
 
 export const ACHIEVEMENTS = [
+  { id: "ach-first-steps", name: "First Steps", description: "Visited your first non-start district.", category: "Exploration", requirement: { type: "districts-visited", target: 2 }, reward: { xp: 12 } },
+  { id: "ach-city-explorer", name: "City Explorer", description: "Visited 5 districts.", category: "Exploration", requirement: { type: "districts-visited", target: 5 }, reward: { xp: 30 } },
+  { id: "ach-queen-arrival", name: "Queen's Arrival", description: "Reached level 2.", category: "Progression", requirement: { type: "level", target: 2 }, reward: { cash: 180 } },
+  { id: "ach-business-woman", name: "Business Woman", description: "Purchased your first business.", category: "Business", requirement: { type: "businesses-owned", target: 1 }, reward: { xp: 20 } },
+  { id: "ach-nightlife", name: "Nightlife", description: "Visited a nightclub location.", category: "Story", requirement: { type: "visit-location", target: "luxury-club" }, reward: { cityReputation: 1 } },
   { id: "ach-explore-1", name: "City Entry", description: "Visit 2 districts.", category: "Exploration", requirement: { type: "districts-visited", target: 2 }, reward: { xp: 15 } },
   { id: "ach-explore-2", name: "Urban Mapper", description: "Visit all 6 districts.", category: "Exploration", requirement: { type: "districts-visited", target: 6 }, reward: { xp: 45 } },
   { id: "ach-money-1", name: "First Big Stack", description: "Earn $2,000 lifetime.", category: "Money", requirement: { type: "money-earned", target: 2000 }, reward: { cityReputation: 1 } },
@@ -1207,5 +1316,7 @@ export const BACKGROUND_POPULATION_TEMPLATES = {
   harbor: ["Dock Workers", "Cargo Drivers", "Club Guests", "Security"],
   industrial: ["Factory Workers", "Mechanics", "Logistics Staff", "Inspectors"],
   "rich-district": ["Club Members", "Private Staff", "Luxury Customers", "Security"],
-  underground: ["Fixers", "Runners", "Faction Scouts", "Underground Guests"]
+  underground: ["Fixers", "Runners", "Faction Scouts", "Underground Guests"],
+  residential: ["Residents", "Vendors", "Courier Riders", "Families"],
+  "safehouse-area": ["Guards", "Mechanics", "Operators", "Drivers"]
 };
