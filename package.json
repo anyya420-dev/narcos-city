@@ -1,0 +1,21 @@
+{
+  "name": "narcos-city",
+  "version": "1.0.0",
+  "description": "A mobile-first Narcos City vertical slice built with plain HTML, CSS, and JavaScript.",
+  "scripts": {
+    "start": "python3 -m http.server 4173",
+    "test": "node --test app.test.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "http://localhost:26831/anyya420-dev/narcos-city"
+  },
+  "keywords": [
+    "game",
+    "vertical-slice",
+    "browser"
+  ],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs"
+}
