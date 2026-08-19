@@ -250,29 +250,29 @@ function renderSettings() {
   `;
 }
 
+function renderDistrictMap() {
+  const anchors = createDistrictAnchors(state.districts);
+  const entries = state.districts
+    .map((district) => {
+      const anchor = anchors[district.id] || { x: 0, z: 0 };
+      const x = 120 + anchor.x * 2;
+      const y = 120 + anchor.z * 2;
+      const active = district.id === state.selectedDistrictId;
+      return `<button class="district-map-point ${active ? "active" : ""}" data-action="travel" data-district-id="${district.id}" style="left:${x}px;top:${y}px;">${escapeHtml(
+        district.name
+      )}</button>`;
+    })
+    .join("");
+  return `<section class="card">
+    <h3>City Map</h3>
+    <div class="district-map">${entries}</div>
+  </section>`;
+}
+
 function renderEventPanel() {
   const event = state.meta.pendingEvent;
   if (!event) {
     return `<section class="card"><h3>Event</h3><p class="muted">No active event choices.</p></section>`;
-  }
-
-  function renderDistrictMap() {
-    const anchors = createDistrictAnchors(state.districts);
-    const entries = state.districts
-      .map((district) => {
-        const anchor = anchors[district.id] || { x: 0, z: 0 };
-        const x = 120 + anchor.x * 2;
-        const y = 120 + anchor.z * 2;
-        const active = district.id === state.selectedDistrictId;
-        return `<button class="district-map-point ${active ? "active" : ""}" data-action="travel" data-district-id="${district.id}" style="left:${x}px;top:${y}px;">${escapeHtml(
-          district.name
-        )}</button>`;
-      })
-      .join("");
-    return `<section class="card">
-      <h3>City Map</h3>
-      <div class="district-map">${entries}</div>
-    </section>`;
   }
   const choices = event.choices
     .map((choice) => `<button data-action="event-choice" data-choice-id="${choice.id}">${escapeHtml(choice.label)}</button>`)
@@ -372,11 +372,39 @@ function renderCity() {
   `;
 
   const worldContainer = document.getElementById("city-world-3d-container");
+  const mountFallbackWorld = () => {
+    state.meta.disable3dWorld = true;
+    setRuntimeNotice("3D world unavailable in this browser. Core city gameplay remains playable from the panels below.");
+    if (worldContainer) {
+      worldContainer.innerHTML = `
+        <div class="city-world-stage">
+          <div class="city-world-overlay">
+            <div class="city-world-heads-up">
+              <p>3D world preview unavailable on this device/browser.</p>
+              <p>Use the city panels to travel, enter locations, interact, and progress.</p>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+  };
+
+  if (state.meta.disable3dWorld) {
+    mountFallbackWorld();
+    return;
+  }
+
   try {
     cityWorldSession = mountCityWorld3d({
       container: worldContainer,
       state,
       settings: state.settings,
+      onError: () => {
+        cityWorldSession = null;
+        mountFallbackWorld();
+        persist();
+        render();
+      },
       onInteract: (target) => {
         if (!target) return;
         if (state.settings?.soundEnabled) audio.interact();
@@ -437,19 +465,7 @@ function renderCity() {
   } catch (error) {
     cityWorldSession = null;
     console.error("Failed to mount 3D city world:", error);
-    setRuntimeNotice("3D world unavailable in this browser. Core city gameplay remains playable from the panels below.");
-    if (worldContainer) {
-      worldContainer.innerHTML = `
-        <div class="city-world-stage">
-          <div class="city-world-overlay">
-            <div class="city-world-heads-up">
-              <p>3D world preview unavailable on this device/browser.</p>
-              <p>Use the city panels to travel, enter locations, interact, and progress.</p>
-            </div>
-          </div>
-        </div>
-      `;
-    }
+    mountFallbackWorld();
   }
 }
 

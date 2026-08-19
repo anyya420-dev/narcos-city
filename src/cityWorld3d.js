@@ -1,4 +1,4 @@
-import * as THREE from "https://unpkg.com/three@0.167.1/build/three.module.js";
+import * as THREE from "./vendor/three.module.js";
 import {
   buildWorldModel,
   findNearestInteraction,
@@ -438,7 +438,7 @@ function populateInteriors(scene, interiorType, markers) {
   scene.add(exitMarker);
 }
 
-export function mountCityWorld3d({ container, state, onInteract, settings = {} }) {
+export function mountCityWorld3d({ container, state, onInteract, onError, settings = {} }) {
   if (!container) return { destroy() {} };
   if (typeof window === "undefined" || !window.WebGLRenderingContext) {
     container.innerHTML = `<section class="card"><h3>3D Unsupported</h3><p class="muted">WebGL is unavailable on this device. Use City/District panels.</p></section>`;
@@ -502,6 +502,7 @@ export function mountCityWorld3d({ container, state, onInteract, settings = {} }
   const camera = new THREE.PerspectiveCamera(62, 1, 0.1, 260);
   const clock = new THREE.Clock();
   const raycaster = new THREE.Raycaster();
+  raycaster.camera = camera;
   const colliders = [];
   const streetLights = [];
   let disposed = false;
@@ -724,90 +725,95 @@ export function mountCityWorld3d({ container, state, onInteract, settings = {} }
 
   function animate() {
     if (disposed) return;
-    requestAnimationFrame(animate);
-    const dt = Math.min(0.05, clock.getDelta());
+    try {
+      const dt = Math.min(0.05, clock.getDelta());
 
-    const padX = joystick.state.x;
-    const padY = joystick.state.y;
-    const keyboardX = (keys.right ? 1 : 0) - (keys.left ? 1 : 0);
-    const keyboardY = (keys.up ? 1 : 0) - (keys.down ? 1 : 0);
-    const inputX = Math.max(-1, Math.min(1, padX + keyboardX));
-    const inputY = Math.max(-1, Math.min(1, -padY + keyboardY));
+      const padX = joystick.state.x;
+      const padY = joystick.state.y;
+      const keyboardX = (keys.right ? 1 : 0) - (keys.left ? 1 : 0);
+      const keyboardY = (keys.up ? 1 : 0) - (keys.down ? 1 : 0);
+      const inputX = Math.max(-1, Math.min(1, padX + keyboardX));
+      const inputY = Math.max(-1, Math.min(1, -padY + keyboardY));
 
-    const mag = Math.hypot(inputX, inputY);
-    const targetSpeed = (sprintHeld ? RUN_SPEED : WALK_SPEED) * Math.min(1, mag);
-    const accel = targetSpeed > currentSpeed ? ACCELERATION : DECELERATION;
-    currentSpeed += (targetSpeed - currentSpeed) * Math.min(1, accel * dt);
+      const mag = Math.hypot(inputX, inputY);
+      const targetSpeed = (sprintHeld ? RUN_SPEED : WALK_SPEED) * Math.min(1, mag);
+      const accel = targetSpeed > currentSpeed ? ACCELERATION : DECELERATION;
+      currentSpeed += (targetSpeed - currentSpeed) * Math.min(1, accel * dt);
 
-    if (mag > 0.02 && currentSpeed > 0.02) {
-      const normX = inputX / mag;
-      const normY = inputY / mag;
-      const moveAngle = yaw + Math.atan2(normX, normY);
-      player.position.x += Math.sin(moveAngle) * currentSpeed * dt;
-      player.position.z += Math.cos(moveAngle) * currentSpeed * dt;
+      if (mag > 0.02 && currentSpeed > 0.02) {
+        const normX = inputX / mag;
+        const normY = inputY / mag;
+        const moveAngle = yaw + Math.atan2(normX, normY);
+        player.position.x += Math.sin(moveAngle) * currentSpeed * dt;
+        player.position.z += Math.cos(moveAngle) * currentSpeed * dt;
 
-      if (!interiorType) {
-        const corrected = resolveWorldCollisions({ x: player.position.x, z: player.position.z }, PLAYER_RADIUS, model.blockedZones);
-        player.position.x = corrected.x;
-        player.position.z = corrected.z;
-      } else {
-        player.position.x = Math.max(-13.3, Math.min(13.3, player.position.x));
-        player.position.z = Math.max(-13.3, Math.min(13.3, player.position.z));
+        if (!interiorType) {
+          const corrected = resolveWorldCollisions({ x: player.position.x, z: player.position.z }, PLAYER_RADIUS, model.blockedZones);
+          player.position.x = corrected.x;
+          player.position.z = corrected.z;
+        } else {
+          player.position.x = Math.max(-13.3, Math.min(13.3, player.position.x));
+          player.position.z = Math.max(-13.3, Math.min(13.3, player.position.z));
+        }
+
+        const targetYaw = Math.atan2(Math.sin(moveAngle), Math.cos(moveAngle));
+        const deltaYaw = Math.atan2(Math.sin(targetYaw - player.rotation.y), Math.cos(targetYaw - player.rotation.y));
+        player.rotation.y += deltaYaw * Math.min(1, dt * 10);
       }
 
-      const targetYaw = Math.atan2(Math.sin(moveAngle), Math.cos(moveAngle));
-      const deltaYaw = Math.atan2(Math.sin(targetYaw - player.rotation.y), Math.cos(targetYaw - player.rotation.y));
-      player.rotation.y += deltaYaw * Math.min(1, dt * 10);
+      velocityY -= GRAVITY * dt;
+      player.position.y += velocityY * dt;
+      if (player.position.y <= 0) {
+        player.position.y = 0;
+        velocityY = 0;
+      }
+
+      animatePlayer(player, currentSpeed, dt);
+      updateNpcWander(dt);
+
+      const dynamicInteractables = interiorType
+        ? interiorInteractables
+        : [
+            ...model.buildings.map((entry) => ({
+              id: entry.locationId,
+              name: entry.name,
+              districtId: entry.districtId,
+              x: entry.door.x,
+              z: entry.door.z,
+              prompt: entry.prompt,
+              interactionType: "door",
+              enterable: entry.enterable,
+              locationType: entry.locationType
+            })),
+            ...npcs.map((npc) => ({
+              id: npc.id,
+              districtId: npc.districtId,
+              locationId: npc.locationId,
+              x: npc.mesh.position.x,
+              z: npc.mesh.position.z,
+              prompt: npc.prompt,
+              interactionType: "npc"
+            })),
+            ...interactables.filter((entry) => entry.interactionType === "vehicle" || entry.interactionType === "district-marker")
+          ];
+
+      nearest = findNearestInteraction({ x: player.position.x, z: player.position.z }, dynamicInteractables, INTERACTION_RANGE);
+      if (nearest) {
+        const buttonPrompt = interiorType ? "Tap INTERACT" : "[E] or Tap INTERACT";
+        promptNode.textContent = `${nearest.prompt} · ${buttonPrompt}`;
+      } else {
+        const districtName = state.districts.find((d) => d.id === state.selectedDistrictId)?.name || "CITY";
+        const locationName = LOCATIONS[state.currentLocationId]?.name || state.currentLocationId;
+        promptNode.textContent = `${districtName} · ${locationName} · Explore and approach highlighted points`;
+      }
+
+      updateCamera(dt);
+      renderer.render(scene, camera);
+      requestAnimationFrame(animate);
+    } catch (error) {
+      disposed = true;
+      onError?.(error);
     }
-
-    velocityY -= GRAVITY * dt;
-    player.position.y += velocityY * dt;
-    if (player.position.y <= 0) {
-      player.position.y = 0;
-      velocityY = 0;
-    }
-
-    animatePlayer(player, currentSpeed, dt);
-    updateNpcWander(dt);
-
-    const dynamicInteractables = interiorType
-      ? interiorInteractables
-      : [
-          ...model.buildings.map((entry) => ({
-            id: entry.locationId,
-            name: entry.name,
-            districtId: entry.districtId,
-            x: entry.door.x,
-            z: entry.door.z,
-            prompt: entry.prompt,
-            interactionType: "door",
-            enterable: entry.enterable,
-            locationType: entry.locationType
-          })),
-          ...npcs.map((npc) => ({
-            id: npc.id,
-            districtId: npc.districtId,
-            locationId: npc.locationId,
-            x: npc.mesh.position.x,
-            z: npc.mesh.position.z,
-            prompt: npc.prompt,
-            interactionType: "npc"
-          })),
-          ...interactables.filter((entry) => entry.interactionType === "vehicle" || entry.interactionType === "district-marker")
-        ];
-
-    nearest = findNearestInteraction({ x: player.position.x, z: player.position.z }, dynamicInteractables, INTERACTION_RANGE);
-    if (nearest) {
-      const buttonPrompt = interiorType ? "Tap INTERACT" : "[E] or Tap INTERACT";
-      promptNode.textContent = `${nearest.prompt} · ${buttonPrompt}`;
-    } else {
-      const districtName = state.districts.find((d) => d.id === state.selectedDistrictId)?.name || "CITY";
-      const locationName = LOCATIONS[state.currentLocationId]?.name || state.currentLocationId;
-      promptNode.textContent = `${districtName} · ${locationName} · Explore and approach highlighted points`;
-    }
-
-    updateCamera(dt);
-    renderer.render(scene, camera);
   }
 
   const onResize = () => updateSize();
