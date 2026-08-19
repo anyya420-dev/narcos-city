@@ -52,21 +52,24 @@ test('safehouse rest recovers health and energy', () => {
 
 test('safehouse upgrade costs cash and increases level', () => {
   const state = createInitialState();
+  state.player.cash = 2400;
+  const level = state.player.safehouseLevel;
   const cash = state.player.cash;
 
   upgradeSafehouse(state);
 
   assert.equal(state.player.safehouseLevel, 2);
-  assert.equal(state.player.cash, cash - 900);
+  assert.equal(state.player.cash, cash - level * 900);
 });
 
 test('district cooling spends cash and reduces heat', () => {
   const state = createInitialState();
   const district = getSelectedDistrict(state);
   district.heat = 40;
+  const startCash = state.player.cash;
 
   coolDistrictHeat(state, district.id);
 
-  assert.equal(state.player.cash, 820);
+  assert.equal(state.player.cash, startCash - 180);
   assert.equal(district.heat, 24);
 });

@@ -1,5 +1,6 @@
 import {
   createInitialState,
+  LEVEL_THRESHOLD,
   navigateTo,
   travelToDistrict,
   performLocationAction,
@@ -17,6 +18,13 @@ function loadState() {
     if (!saved) return createInitialState();
     const parsed = JSON.parse(saved);
     if (!parsed?.player || !Array.isArray(parsed?.districts)) return createInitialState();
+    if (parsed.player.nextLevelReputation == null) {
+      parsed.player.nextLevelReputation = parsed.player.level * LEVEL_THRESHOLD;
+      while (parsed.player.reputation >= parsed.player.nextLevelReputation) {
+        parsed.player.level += 1;
+        parsed.player.nextLevelReputation += LEVEL_THRESHOLD;
+      }
+    }
     return parsed;
   } catch {
     return createInitialState();
@@ -36,13 +44,22 @@ function statBar(value) {
   return `<div class="bar"><span style="width:${Math.max(0, Math.min(value, 100))}%"></span></div>`;
 }
 
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll("\"", "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
 function renderCity() {
   const districtCards = state.districts
     .map(
       (d) => `
       <div class="card">
-        <h3>${d.name}</h3>
-        <p class="muted">${d.vibe}</p>
+        <h3>${escapeHtml(d.name)}</h3>
+        <p class="muted">${escapeHtml(d.vibe)}</p>
         <div class="grid-2">
           <div class="stat">Heat<strong>${d.heat}</strong>${statBar(d.heat)}</div>
           <div class="stat">Control<strong>${d.control}%</strong>${statBar(d.control)}</div>
@@ -58,7 +75,7 @@ function renderCity() {
   root.innerHTML = `
     <section class="card marble">
       <h2>Main City Screen</h2>
-      <p class="muted">Day ${state.day} · Current District: ${getSelectedDistrict(state).name}</p>
+      <p class="muted">Day ${state.day} · Current District: ${escapeHtml(getSelectedDistrict(state).name)}</p>
       <div class="grid-2">
         <div class="stat">Cash<strong>$${state.player.cash}</strong></div>
         <div class="stat">Reputation<strong>${state.player.reputation}</strong></div>
@@ -74,7 +91,7 @@ function renderDistricts() {
   const selected = getSelectedDistrict(state);
   const districtButtons = state.districts
     .map(
-      (d) => `<button data-action="travel" data-district-id="${d.id}" ${d.id === selected.id ? "disabled" : ""}>${d.name}</button>`
+      (d) => `<button data-action="travel" data-district-id="${d.id}" ${d.id === selected.id ? "disabled" : ""}>${escapeHtml(d.name)}</button>`
     )
     .join("");
 
@@ -82,12 +99,12 @@ function renderDistricts() {
     .map(
       (location) => `
       <div class="card">
-        <h4>${location.name}</h4>
-        <p class="muted">${location.description}</p>
+        <h4>${escapeHtml(location.name)}</h4>
+        <p class="muted">${escapeHtml(location.description)}</p>
         <div class="actions">
           ${location.actions
             .map(
-              (a) => `<button data-action="location" data-district-id="${selected.id}" data-location-id="${location.id}" data-action-id="${a.id}">${a.name} (-${a.energy}⚡ / +$${a.cash})</button>`
+              (a) => `<button data-action="location" data-district-id="${selected.id}" data-location-id="${location.id}" data-action-id="${a.id}">${escapeHtml(a.name)} (-${a.energy}⚡ / +$${a.cash})</button>`
             )
             .join("")}
         </div>
@@ -102,7 +119,7 @@ function renderDistricts() {
       <div class="actions">${districtButtons}</div>
     </section>
     <section class="card marble">
-      <h3>${selected.name}</h3>
+      <h3>${escapeHtml(selected.name)}</h3>
       <p class="muted">Heat ${selected.heat} · Control ${selected.control}%</p>
     </section>
     ${locations}
@@ -113,11 +130,11 @@ function renderProfile() {
   root.innerHTML = `
     <section class="card marble">
       <h2>Player Profile</h2>
-      <p class="muted">Alias: ${state.player.alias}</p>
+      <p class="muted">Alias: ${escapeHtml(state.player.alias)}</p>
       <div class="grid-2">
         <div class="stat">Level<strong>${state.player.level}</strong></div>
         <div class="stat">Safehouse<strong>${state.player.safehouseLevel}</strong></div>
-        <div class="stat">Reputation<strong>${state.player.reputation}</strong>${statBar((state.player.reputation % 120) / 1.2)}</div>
+        <div class="stat">Reputation<strong>${state.player.reputation}</strong>${statBar((state.player.reputation % LEVEL_THRESHOLD) * (100 / LEVEL_THRESHOLD))}</div>
         <div class="stat">Cash<strong>$${state.player.cash}</strong></div>
       </div>
     </section>
@@ -155,7 +172,7 @@ function renderNotifications() {
   const items = state.notifications
     .map((n) => {
       const label = n.type === "error" ? "alert" : n.type === "success" ? "ok" : "";
-      return `<div class="card"><span class="badge ${label}">${n.type.toUpperCase()}</span><p>${n.text}</p></div>`;
+      return `<div class="card"><span class="badge ${label}">${escapeHtml(n.type.toUpperCase())}</span><p>${escapeHtml(n.text)}</p></div>`;
     })
     .join("");
 

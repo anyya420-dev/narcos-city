@@ -59,6 +59,10 @@ main {
   margin-bottom: 0.75rem;
 }
 
+.marble {
+  background: var(--marble);
+}
+
 .card h2,
 .card h3,
 .card h4 {

@@ -78,7 +78,7 @@ export const DISTRICTS = [
   }
 ];
 
-const LEVEL_THRESHOLD = 120;
+export const LEVEL_THRESHOLD = 120;
 
 export function createInitialState() {
   return {
@@ -89,6 +89,7 @@ export function createInitialState() {
       alias: "La Sombra",
       level: 1,
       reputation: 20,
+      nextLevelReputation: LEVEL_THRESHOLD,
       cash: 1000,
       health: 90,
       energy: 100,
@@ -116,8 +117,9 @@ function addNotification(state, text, type = "info") {
 }
 
 function applyLeveling(player, state) {
-  while (player.reputation >= player.level * LEVEL_THRESHOLD) {
+  while (player.reputation >= player.nextLevelReputation) {
     player.level += 1;
+    player.nextLevelReputation += LEVEL_THRESHOLD;
     player.health = Math.min(100, player.health + 12);
     player.energy = Math.min(100, player.energy + 20);
     addNotification(state, `Level up. You are now level ${player.level}.`, "success");
