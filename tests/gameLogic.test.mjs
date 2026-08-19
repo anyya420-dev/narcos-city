@@ -58,6 +58,8 @@ test("location action changes economy and energy", () => {
 test("bank deposit and withdraw enforce wallet and bank balance", () => {
   const state = createInitialState();
   createPlayer(state, "Rico");
+  const investmentQuest = state.quests.find((quest) => quest.id === "quest-investment");
+  investmentQuest.completed = true;
   const wallet = state.player.wallet;
   bankDeposit(state, 200);
   assert.equal(state.player.wallet, wallet - 200);
