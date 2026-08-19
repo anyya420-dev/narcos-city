@@ -1,19 +1,35 @@
-import { LOCATIONS } from "./gameData.mjs";
+import { DISTRICTS, LOCATIONS, TITLE_RANKS } from "./gameData.mjs";
 import {
   bankDeposit,
   bankWithdraw,
   buyMarketItem,
+  buyProperty,
   buyVehicle,
+  casinoPlay,
+  chooseEventChoice,
+  claimDailyReward,
   coolDistrictHeat,
   createInitialState,
   createPlayer,
   cycleVehicle,
+  debugAddItem,
+  debugAddMoney,
+  debugAddProperty,
+  debugAddVehicle,
+  debugAddXp,
+  debugChangeReputation,
+  debugCompleteQuest,
+  debugUnlockDistrict,
+  getBusinesses,
   getCurrentLocation,
+  getFactionList,
+  getInventoryEntries,
   getNpcsAtLocation,
+  getProperties,
   getSelectedDistrict,
-  inspectInventory,
-  inspectStorage,
   interactWithNpc,
+  markAllNotificationsRead,
+  markNotificationRead,
   moveToLocation,
   navigateTo,
   normalizeState,
@@ -21,28 +37,28 @@ import {
   resetGame,
   returnToCity,
   runBusinessAction,
+  runFactionAction,
   safehouseRecoverEnergy,
   safehouseRest,
   sellMarketItem,
+  toggleDebugMode,
   travelToDistrict,
   upgradeSafehouse,
   useInventoryItem
 } from "./gameLogic.mjs";
 
-const STORAGE_KEY = "narcos-city-state-v2";
+const STORAGE_KEY = "narcos-city-state-v3";
 
 function loadState() {
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
-    if (!saved) return createInitialState();
-    return normalizeState(JSON.parse(saved));
+    return saved ? normalizeState(JSON.parse(saved)) : createInitialState();
   } catch {
     return createInitialState();
   }
 }
 
 let state = loadState();
-
 const root = document.getElementById("screen-root");
 const nav = document.getElementById("bottom-nav");
 const statusBar = document.getElementById("status-bar");
@@ -51,12 +67,8 @@ function persist() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
 }
 
-function formatMoney(value) {
-  return `$${Number(value || 0).toLocaleString()}`;
-}
-
-function statBar(value) {
-  return `<div class="bar"><span style="width:${Math.max(0, Math.min(100, value))}%"></span></div>`;
+function currency(v) {
+  return `$${Math.round(v || 0).toLocaleString()}`;
 }
 
 function escapeHtml(value) {
@@ -68,26 +80,43 @@ function escapeHtml(value) {
     .replaceAll("'", "&#39;");
 }
 
-function getLocation(locationId) {
-  return LOCATIONS[locationId];
+function progressBar(value, max = 100) {
+  const pct = Math.max(0, Math.min(100, (value / Math.max(1, max)) * 100));
+  return `<div class="bar"><span style="width:${pct}%"></span></div>`;
+}
+
+function relationshipSnippet() {
+  const top = Object.entries(state.relationships)
+    .sort((a, b) => b[1].value - a[1].value)
+    .slice(0, 3)
+    .map(([npcId, rel]) => {
+      const npc = state.npcs.find((n) => n.id === npcId);
+      return npc ? `<div class="stat"><span>${escapeHtml(npc.name)}</span><strong>${rel.value} (${escapeHtml(rel.status)})</strong></div>` : "";
+    })
+    .join("");
+  return top || '<p class="muted">No relationships yet.</p>';
 }
 
 function renderStatus() {
   if (!state.meta.hasCreatedCharacter) {
-    statusBar.innerHTML = `<p class="muted">Create your character to start your first day.</p>`;
+    statusBar.innerHTML = `<p class="muted">Create your character and enter NARCOS CITY.</p>`;
     return;
   }
+
   const district = getSelectedDistrict(state);
   const location = getCurrentLocation(state);
+  const totalRep = state.player.reputation.city + state.player.reputation.street + state.player.reputation.business + state.player.reputation.faction;
   statusBar.innerHTML = `
     <div class="status-grid">
       <div><span>Name</span><strong>${escapeHtml(state.player.name)}</strong></div>
       <div><span>Title</span><strong>${escapeHtml(state.player.title)}</strong></div>
-      <div><span>Lvl</span><strong>${state.player.level}</strong></div>
-      <div><span>Money</span><strong>${formatMoney(state.player.wallet)}</strong></div>
+      <div><span>Level</span><strong>${state.player.level}</strong></div>
+      <div><span>XP</span><strong>${state.player.xp}/${state.player.nextLevelXp}</strong></div>
+      <div><span>Cash / Bank</span><strong>${currency(state.player.money)} / ${currency(state.player.bankBalance)}</strong></div>
       <div><span>Energy</span><strong>${state.player.energy}</strong></div>
       <div><span>Health</span><strong>${state.player.health}</strong></div>
-      <div><span>Rep</span><strong>${state.player.reputation}</strong></div>
+      <div><span>Wanted</span><strong>${state.player.wantedLevel}/5</strong></div>
+      <div><span>Rep Total</span><strong>${totalRep}</strong></div>
       <div><span>District</span><strong>${escapeHtml(district.name)}</strong></div>
       <div><span>Location</span><strong>${escapeHtml(location.name)}</strong></div>
       <div><span>Day/Turn</span><strong>${state.time.day}/${state.time.turn}</strong></div>
@@ -98,8 +127,8 @@ function renderStatus() {
 function renderSetup() {
   root.innerHTML = `
     <section class="card marble">
-      <h2>Welcome to NARCOS CITY</h2>
-      <p class="muted">Enter your character name to begin your story.</p>
+      <h2>NARCOS CITY — CHAPTER 1</h2>
+      <p class="muted">The City Knows Your Name.</p>
       <label class="field">
         <span>Character Name</span>
         <input id="player-name-input" maxlength="24" placeholder="Enter your name" />
@@ -111,180 +140,234 @@ function renderSetup() {
   `;
 }
 
+function renderEventPanel() {
+  const event = state.meta.pendingEvent;
+  if (!event) {
+    return `<section class="card"><h3>Event</h3><p class="muted">No active event choices.</p></section>`;
+  }
+  const choices = event.choices
+    .map((choice) => `<button data-action="event-choice" data-choice-id="${choice.id}">${escapeHtml(choice.label)}</button>`)
+    .join("");
+  return `
+    <section class="card">
+      <h3>${escapeHtml(event.title)}</h3>
+      <p class="muted">${escapeHtml(event.description)}</p>
+      <div class="actions">${choices}</div>
+    </section>
+  `;
+}
+
 function renderCity() {
   const district = getSelectedDistrict(state);
-  const currentLocation = getCurrentLocation(state);
+  const location = getCurrentLocation(state);
+
   const locationsMarkup = district.locations
     .map((locationId) => {
-      const location = getLocation(locationId);
-      if (!location) return "";
+      const loc = LOCATIONS[locationId];
       const active = locationId === state.currentLocationId ? " active-location" : "";
       return `
         <article class="card${active}">
-          <h3>${escapeHtml(location.name)}</h3>
-          <p class="muted">${escapeHtml(location.description)}</p>
+          <h4>${escapeHtml(loc.name)}</h4>
+          <p class="muted">${escapeHtml(loc.description)}</p>
           <div class="actions">
             <button data-action="enter-location" data-district-id="${district.id}" data-location-id="${locationId}">Enter</button>
-            <button data-action="travel" data-district-id="${district.id}">Stay in ${escapeHtml(district.name)}</button>
           </div>
         </article>
       `;
     })
     .join("");
 
-  const actionButtons = currentLocation.actions
-    .map(
-      (action) => `<button data-action="location-action" data-district-id="${district.id}" data-location-id="${currentLocation.id}" data-action-id="${action.id}">${escapeHtml(action.name)}</button>`
-    )
+  const actionButtons = location.actions
+    .map((action) => `<button data-action="location-action" data-district-id="${district.id}" data-location-id="${location.id}" data-action-id="${action.id}">${escapeHtml(action.name)}</button>`)
     .join("");
 
-  const npcs = getNpcsAtLocation(state, currentLocation.id)
-    .map(
-      (npc) => `
-      <div class="stat">
-        <span>${escapeHtml(npc.name)} · ${escapeHtml(npc.role)}</span>
-        <strong>Relationship ${state.relationships[npc.id]?.relationshipValue ?? 0}</strong>
-        <div class="actions">
-          <button data-action="npc-action" data-npc-id="${npc.id}" data-npc-interaction="talk">Talk</button>
-          <button data-action="npc-action" data-npc-id="${npc.id}" data-npc-interaction="socialize">Socialize</button>
-          <button data-action="npc-action" data-npc-id="${npc.id}" data-npc-interaction="help">Help</button>
-          <button data-action="npc-action" data-npc-id="${npc.id}" data-npc-interaction="leave">Leave</button>
-        </div>
-      </div>
-    `
-    )
+  const npcCards = getNpcsAtLocation(state, location.id)
+    .map((npc) => {
+      const rel = state.relationships[npc.id] || { value: 0, status: "Stranger" };
+      return `
+        <article class="stat">
+          <span>${escapeHtml(npc.name)} · ${escapeHtml(npc.role)}</span>
+          <strong>${rel.value} · ${escapeHtml(rel.status)}</strong>
+          <p class="muted">${escapeHtml(npc.dialogue[0] || "")}</p>
+          <div class="actions">
+            <button data-action="npc-action" data-npc-id="${npc.id}" data-npc-interaction="talk">Talk</button>
+            <button data-action="npc-action" data-npc-id="${npc.id}" data-npc-interaction="socialize">Socialize</button>
+            <button data-action="npc-action" data-npc-id="${npc.id}" data-npc-interaction="help">Help</button>
+            <button data-action="npc-action" data-npc-id="${npc.id}" data-npc-interaction="give-gift">Gift</button>
+            <button data-action="npc-action" data-npc-id="${npc.id}" data-npc-interaction="work-together">Work Together</button>
+          </div>
+        </article>
+      `;
+    })
     .join("");
-
-  const eventMarkup = state.meta.lastEvent
-    ? `<div class="card"><h3>${escapeHtml(state.meta.lastEvent.title)}</h3><p class="muted">${escapeHtml(state.meta.lastEvent.description)}</p></div>`
-    : `<div class="card"><p class="muted">No active event. The city is waiting for your move.</p></div>`;
 
   root.innerHTML = `
     <section class="card marble">
-      <h2>City Overview</h2>
-      <p class="muted">${escapeHtml(district.name)} · ${escapeHtml(district.atmosphere)}</p>
-      <p class="muted">Current location: ${escapeHtml(currentLocation.name)} · Day ${state.time.day}, Turn ${state.time.turn}</p>
-      <p class="muted">${escapeHtml(state.player.status)}</p>
+      <h2>${escapeHtml(district.name)}</h2>
+      <p class="muted">${escapeHtml(district.description)}</p>
+      <p class="muted">Atmosphere: ${escapeHtml(district.atmosphere)} · Danger ${district.dangerLevel}/5 · Wealth ${district.wealthLevel}/5</p>
+      <div class="actions">
+        <button data-action="claim-daily">Claim Daily Reward</button>
+        <button data-action="safehouse-rest">Rest</button>
+        <button data-action="safehouse-energy">Recover Energy</button>
+      </div>
     </section>
-    ${eventMarkup}
+    ${renderEventPanel()}
     <section class="card">
-      <h3>Available Locations</h3>
+      <h3>District Locations</h3>
       ${locationsMarkup}
     </section>
     <section class="card">
-      <h3>${escapeHtml(currentLocation.name)} Actions</h3>
-      <p class="muted">${escapeHtml(currentLocation.description)}</p>
+      <h3>${escapeHtml(location.name)} Actions</h3>
       <div class="actions">${actionButtons}</div>
     </section>
     <section class="card">
       <h3>People Here</h3>
-      ${npcs || '<p class="muted">No contacts available in this location.</p>'}
+      ${npcCards || '<p class="muted">No contacts at this location.</p>'}
     </section>
   `;
 }
 
 function renderDistricts() {
-  const districtCards = state.districts
-    .map((district) => {
-      const selected = district.id === state.selectedDistrictId;
-      const vehicle = state.vehicles.find((entry) => entry.id === state.selectedVehicleId) || state.vehicles[0];
-      const travelCost = Math.max(20, district.travelCost + vehicle.travelCost - 90);
-      return `
-        <article class="card${selected ? " active-location" : ""}">
-          <h3>${escapeHtml(district.name)}</h3>
-          <p class="muted">${escapeHtml(district.description)}</p>
-          <p class="muted">Atmosphere: ${escapeHtml(district.atmosphere)}</p>
-          <div class="grid-2">
-            <div class="stat">Travel Cost<strong>${formatMoney(travelCost)}</strong></div>
-            <div class="stat">Turn Cost<strong>${district.travelTurns}</strong></div>
-            <div class="stat">Danger Mod<strong>${district.dangerModifier}</strong></div>
-            <div class="stat">Rep Mod<strong>${district.reputationModifier}</strong></div>
-          </div>
-          <div class="actions">
-            <button data-action="travel" data-district-id="${district.id}">Travel</button>
-            <button data-action="enter-location" data-district-id="${district.id}" data-location-id="${district.locations[0]}">Enter ${escapeHtml(getLocation(district.locations[0])?.name || "Location")}</button>
-            <button data-action="cool-heat" data-district-id="${district.id}">Reduce Heat</button>
-          </div>
-        </article>
-      `;
-    })
-    .join("");
+  const currentVehicle = state.vehicles.find((entry) => entry.id === state.player.currentVehicleId);
+  const cards = DISTRICTS.map((district) => {
+    const selected = district.id === state.selectedDistrictId ? " active-location" : "";
+    const travelCost = Math.max(40, district.travelCost + (currentVehicle?.travelCost || 60) - 80);
+    const locked = state.player.reputation.city < district.reputationRequirement;
+    return `
+      <article class="card${selected}">
+        <h3>${escapeHtml(district.name)}</h3>
+        <p class="muted">${escapeHtml(district.description)}</p>
+        <div class="grid-2">
+          <div class="stat">Reputation Req<strong>${district.reputationRequirement}</strong></div>
+          <div class="stat">Travel Cost<strong>${currency(travelCost)}</strong></div>
+          <div class="stat">Travel Time<strong>${district.travelTime}</strong></div>
+          <div class="stat">Danger/Wealth<strong>${district.dangerLevel}/${district.wealthLevel}</strong></div>
+        </div>
+        <div class="actions">
+          <button data-action="travel" data-district-id="${district.id}" ${locked ? "disabled" : ""}>Travel</button>
+          <button data-action="cool-heat" data-district-id="${district.id}">Reduce Wanted</button>
+        </div>
+      </article>
+    `;
+  }).join("");
 
   root.innerHTML = `
     <section class="card marble">
-      <h2>District System</h2>
-      <p class="muted">Move between territories and control your influence route.</p>
+      <h2>District Network</h2>
+      <p class="muted">Travel reshapes reputation, risk, and opportunities.</p>
     </section>
-    ${districtCards}
+    ${cards}
   `;
 }
 
 function renderProfile() {
-  const district = getSelectedDistrict(state);
-  const location = getCurrentLocation(state);
-  const stats = state.player.stats;
-  const completedQuests = state.quests.filter((quest) => quest.completed).length;
-  const unlockedAchievements = state.achievements.filter((achievement) => achievement.unlocked).length;
+  const rep = state.player.reputation;
+  const titleIndex = TITLE_RANKS.findIndex((rank) => rank.name === state.player.title);
 
   root.innerHTML = `
     <section class="card marble">
-      <h2>Player Profile</h2>
-      <p class="muted">${escapeHtml(state.player.name)} · ${escapeHtml(state.player.title)} · Role: ${escapeHtml(state.player.role)}</p>
+      <h2>Profile</h2>
+      <p class="muted">${escapeHtml(state.player.name)} · ${escapeHtml(state.player.title)} (Rank ${titleIndex + 1}/${TITLE_RANKS.length})</p>
       <div class="grid-2">
-        <div class="stat">Level<strong>${state.player.level}</strong></div>
-        <div class="stat">Experience<strong>${state.player.experience}/${state.player.nextLevelExperience}</strong></div>
-        <div class="stat">Money<strong>${formatMoney(state.player.wallet)}</strong></div>
-        <div class="stat">Bank<strong>${formatMoney(state.player.bankBalance)}</strong></div>
-        <div class="stat">Health<strong>${state.player.health}</strong>${statBar(state.player.health)}</div>
-        <div class="stat">Energy<strong>${state.player.energy}</strong>${statBar(state.player.energy)}</div>
-        <div class="stat">Reputation<strong>${state.player.reputation}</strong>${statBar(Math.min(100, state.player.reputation * 4))}</div>
-        <div class="stat">District/Location<strong>${escapeHtml(district.name)} / ${escapeHtml(location.name)}</strong></div>
-        <div class="stat">Day/Turn<strong>${state.time.day}/${state.time.turn}</strong></div>
-        <div class="stat">Quests/Achievements<strong>${completedQuests} / ${unlockedAchievements}</strong></div>
+        <div class="stat">Level<strong>${state.player.level}</strong>${progressBar(state.player.xp, state.player.nextLevelXp)}</div>
+        <div class="stat">Influence<strong>${state.player.influence}</strong>${progressBar(state.player.influence, 100)}</div>
+        <div class="stat">Health<strong>${state.player.health}</strong>${progressBar(state.player.health)}</div>
+        <div class="stat">Energy<strong>${state.player.energy}</strong>${progressBar(state.player.energy)}</div>
+        <div class="stat">Strength<strong>${state.player.strength}</strong></div>
+        <div class="stat">Intelligence<strong>${state.player.intelligence}</strong></div>
+        <div class="stat">Charisma<strong>${state.player.charisma}</strong></div>
+        <div class="stat">Wanted<strong>${state.player.wantedLevel}/5</strong>${progressBar(state.player.wantedLevel, 5)}</div>
       </div>
     </section>
     <section class="card">
-      <h3>Statistics</h3>
+      <h3>Reputation</h3>
       <div class="grid-2">
-        <div class="stat">Strength<strong>${stats.strength}</strong></div>
-        <div class="stat">Intelligence<strong>${stats.intelligence}</strong></div>
-        <div class="stat">Charisma<strong>${stats.charisma}</strong></div>
-        <div class="stat">Influence<strong>${stats.influence}</strong></div>
-        <div class="stat">Street Reputation<strong>${stats.streetReputation}</strong></div>
+        <div class="stat">City<strong>${rep.city}</strong>${progressBar(rep.city, 60)}</div>
+        <div class="stat">Street<strong>${rep.street}</strong>${progressBar(rep.street, 60)}</div>
+        <div class="stat">Business<strong>${rep.business}</strong>${progressBar(rep.business, 60)}</div>
+        <div class="stat">Faction<strong>${rep.faction}</strong>${progressBar(rep.faction, 60)}</div>
       </div>
-      <div class="actions">
-        <button data-action="safehouse-rest">Rest</button>
-        <button data-action="safehouse-energy">Recover Energy</button>
+    </section>
+    <section class="card">
+      <h3>Top Relationships</h3>
+      <div class="grid-2">${relationshipSnippet()}</div>
+    </section>
+    <section class="card">
+      <h3>Lifetime Statistics</h3>
+      <div class="grid-2">
+        <div class="stat">Districts Visited<strong>${state.statistics.districtsVisited.length}</strong></div>
+        <div class="stat">Locations Visited<strong>${state.statistics.locationsVisited.length}</strong></div>
+        <div class="stat">Money Earned<strong>${currency(state.statistics.moneyEarned)}</strong></div>
+        <div class="stat">Money Spent<strong>${currency(state.statistics.moneySpent)}</strong></div>
+        <div class="stat">Quests Completed<strong>${state.statistics.questsCompleted}</strong></div>
+        <div class="stat">NPCs Met<strong>${state.statistics.npcsMet.length}</strong></div>
+        <div class="stat">Businesses Owned<strong>${state.player.ownedBusinesses.length}</strong></div>
+        <div class="stat">Properties Owned<strong>${state.player.ownedProperties.length}</strong></div>
+        <div class="stat">Vehicles Owned<strong>${state.vehicles.filter((v) => v.owned).length}</strong></div>
+        <div class="stat">Casino W/L<strong>${state.statistics.casinoWins}/${state.statistics.casinoLosses}</strong></div>
+        <div class="stat">Travel Count<strong>${state.statistics.travelCount}</strong></div>
+        <div class="stat">Achievements<strong>${state.statistics.achievementsUnlocked}</strong></div>
       </div>
     </section>
   `;
 }
 
 function renderInventory() {
-  const items = state.inventory
+  const inventoryCards = getInventoryEntries(state)
     .map(
       (item) => `
       <article class="card">
         <h4>${escapeHtml(item.name)}</h4>
-        <p class="muted">${escapeHtml(item.category)} · Qty ${item.quantity}</p>
+        <p class="muted">${escapeHtml(item.category)} · Qty ${item.quantity} · ${currency(item.price)}</p>
         <p class="muted">${escapeHtml(item.description)}</p>
         <div class="actions">
-          <button data-action="use-item" data-item-id="${item.id}">Use</button>
+          ${item.usable ? `<button data-action="use-item" data-item-id="${item.id}">Use</button>` : ""}
+          <button data-action="sell-item" data-item-id="${item.id}" data-price="${Math.floor(item.price * 0.65)}">Sell</button>
         </div>
       </article>
     `
     )
     .join("");
 
-  const vehicles = state.vehicles
+  const marketCards = state.marketCatalog
+    .map(
+      (item) => `
+      <article class="card">
+        <h4>${escapeHtml(item.name)}</h4>
+        <p class="muted">${escapeHtml(item.category)} · ${currency(item.price)}</p>
+        <div class="actions">
+          <button data-action="buy-item" data-item-id="${item.id}" data-price="${item.price}">Buy</button>
+        </div>
+      </article>
+    `
+    )
+    .join("");
+
+  const vehicleCards = state.vehicles
     .map(
       (vehicle) => `
-      <article class="card${vehicle.id === state.selectedVehicleId ? " active-location" : ""}">
+      <article class="card${vehicle.id === state.player.currentVehicleId ? " active-location" : ""}">
         <h4>${escapeHtml(vehicle.name)}</h4>
-        <p class="muted">Speed ${vehicle.speed} · Travel Cost ${formatMoney(vehicle.travelCost)} · ${vehicle.owned ? "Owned" : `Price ${formatMoney(vehicle.price)}`}</p>
+        <p class="muted">${escapeHtml(vehicle.category)} · Speed ${vehicle.speed} · Travel ${currency(vehicle.travelCost)}</p>
         <div class="actions">
-          <button data-action="select-vehicle">Cycle Owned</button>
-          ${vehicle.owned ? "" : `<button data-action="buy-vehicle" data-vehicle-id="${vehicle.id}">Buy</button>`}
+          ${vehicle.owned ? "" : `<button data-action="buy-vehicle" data-vehicle-id="${vehicle.id}">Buy ${currency(vehicle.price)}</button>`}
+          ${vehicle.owned ? `<button data-action="select-vehicle" data-vehicle-id="${vehicle.id}">Select</button>` : ""}
+        </div>
+      </article>
+    `
+    )
+    .join("");
+
+  const propertyCards = getProperties(state)
+    .map(
+      (property) => `
+      <article class="card${property.owned ? " active-location" : ""}">
+        <h4>${escapeHtml(property.name)}</h4>
+        <p class="muted">${escapeHtml(property.type)} · ${escapeHtml(property.district)} · ${property.owned ? "Owned" : currency(property.price)}</p>
+        <p class="muted">Comfort ${property.comfort} · Security ${property.security} · Storage ${property.storage} · Prestige ${property.prestige}</p>
+        <div class="actions">
+          ${property.owned ? "" : `<button data-action="buy-property" data-property-id="${property.id}">Buy</button>`}
         </div>
       </article>
     `
@@ -293,104 +376,150 @@ function renderInventory() {
 
   root.innerHTML = `
     <section class="card marble">
-      <h2>Inventory & Economy</h2>
-      <p class="muted">Wallet ${formatMoney(state.player.wallet)} · Bank ${formatMoney(state.player.bankBalance)}</p>
+      <h2>Inventory · Market · Assets</h2>
+      <p class="muted">Cash ${currency(state.player.money)} · Bank ${currency(state.player.bankBalance)}</p>
       <div class="actions">
         <button data-action="bank-deposit" data-amount="200">Deposit $200</button>
         <button data-action="bank-withdraw" data-amount="200">Withdraw $200</button>
-        <button data-action="inspect-inventory">Inspect Inventory</button>
-        <button data-action="inspect-storage">Inspect Storage</button>
-      </div>
-      <div class="actions">
-        <button data-action="buy-item" data-item-id="medkit" data-price="150">Buy Medkit ($150)</button>
-        <button data-action="buy-item" data-item-id="energy-drink" data-price="60">Buy Energy Drink ($60)</button>
-        <button data-action="sell-item" data-item-id="silver-watch" data-price="170">Sell Silver Watch (+$170)</button>
+        <button data-action="select-vehicle">Cycle Vehicle</button>
       </div>
     </section>
-    <section class="card">
-      <h3>Items</h3>
-      ${items || '<p class="muted">Inventory is empty.</p>'}
-    </section>
-    <section class="card">
-      <h3>Transport</h3>
-      ${vehicles}
-    </section>
+    <section class="card"><h3>Inventory</h3>${inventoryCards || '<p class="muted">Inventory empty.</p>'}</section>
+    <section class="card"><h3>Market</h3>${marketCards}</section>
+    <section class="card"><h3>Vehicle Shop</h3>${vehicleCards}</section>
+    <section class="card"><h3>Property Market</h3>${propertyCards}</section>
   `;
 }
 
 function renderMore() {
-  const questsMarkup = state.quests
+  const quests = state.quests
     .map(
       (quest) => `
       <article class="card">
-        <h4>${escapeHtml(quest.title)} ${quest.completed ? "✓" : ""}</h4>
-        <p class="muted">${escapeHtml(quest.description)}</p>
-        <p class="muted">Progress: ${quest.progress}/${quest.goal}</p>
+        <h4>${escapeHtml(quest.title)} ${quest.status === "completed" ? "✓" : ""}</h4>
+        <p class="muted">${escapeHtml(quest.category.toUpperCase())} · ${escapeHtml(quest.description)}</p>
+        <p class="muted">Status: ${escapeHtml(quest.status)}</p>
+        ${quest.objectives
+          .map((obj) => `<p class="muted">• ${escapeHtml(obj.type)}: ${obj.progress}/${obj.required}</p>`)
+          .join("")}
       </article>
     `
     )
     .join("");
 
-  const achievementsMarkup = state.achievements
+  const achievements = state.achievements
     .map(
       (achievement) => `
       <article class="card">
-        <h4>${escapeHtml(achievement.title)} ${achievement.unlocked ? "✓" : ""}</h4>
-        <p class="muted">${escapeHtml(achievement.description)}</p>
+        <h4>${escapeHtml(achievement.name)} ${achievement.unlocked ? "✓" : ""}</h4>
+        <p class="muted">${escapeHtml(achievement.category)} · ${escapeHtml(achievement.description)}</p>
+        <p class="muted">Progress: ${achievement.progress}/${achievement.requirement.target ?? 1}</p>
       </article>
     `
     )
     .join("");
 
-  const factionsMarkup = state.factions
+  const businesses = getBusinesses(state)
+    .map(
+      (business) => `
+      <article class="card">
+        <h4>${escapeHtml(business.name)} ${business.owned ? "(Owned)" : ""}</h4>
+        <p class="muted">${escapeHtml(business.type)} · Level ${business.level} · Rep ${business.reputation}</p>
+        <p class="muted">Income ${currency(business.income)} · Expenses ${currency(business.expenses)} · Employees ${business.employees}</p>
+        <div class="actions">
+          <button data-action="business-action" data-business-id="${business.id}">${business.owned ? "Collect Income" : `Purchase ${currency(business.purchasePrice)}`}</button>
+          ${business.owned ? `<button data-action="business-upgrade" data-business-id="${business.id}">Upgrade</button>` : ""}
+        </div>
+      </article>
+    `
+    )
+    .join("");
+
+  const factions = getFactionList(state)
     .map(
       (faction) => `
       <article class="card">
         <h4>${escapeHtml(faction.name)}</h4>
         <p class="muted">${escapeHtml(faction.description)}</p>
-        <p class="muted">Influence ${faction.influence} · Your Reputation ${faction.playerReputation}</p>
+        <p class="muted">Influence ${faction.influence} · Your Rep ${state.player.factionReputation[faction.id] || 0}</p>
+        <div class="actions">
+          <button data-action="faction-action" data-faction-id="${faction.id}">Faction Activity</button>
+        </div>
       </article>
     `
     )
     .join("");
 
-  const businessesMarkup = state.businesses
+  const notifications = state.notifications
+    .slice(0, 20)
     .map(
-      (business) => `
-      <article class="card">
-        <h4>${escapeHtml(business.name)} ${business.owned ? "(Owned)" : ""}</h4>
-        <p class="muted">${escapeHtml(business.type)} · Value ${formatMoney(business.value)} · Income ${formatMoney(business.income)}</p>
-        <p class="muted">Business Reputation: ${business.reputation}</p>
+      (note) => `
+      <article class="card${note.read ? "" : " active-location"}">
+        <span class="badge ${note.type === "error" ? "alert" : note.type === "success" ? "ok" : ""}">${escapeHtml(note.category)}</span>
+        <p>${escapeHtml(note.text)}</p>
+        <p class="muted">Day ${note.day} Turn ${note.turn}</p>
         <div class="actions">
-          <button data-action="business-action" data-business-id="${business.id}">${business.owned ? "Collect Income" : "Start Operation"}</button>
+          ${note.read ? "" : `<button data-action="mark-note" data-note-id="${note.id}">Mark Read</button>`}
         </div>
       </article>
+    `
     )
     .join("");
 
-  const toasts = state.notifications
-    .slice(0, 6)
+  const transactions = state.transactions
+    .slice(0, 12)
     .map(
-      (note) => `<article class="card"><span class="badge ${note.type === "error" ? "alert" : note.type === "success" ? "ok" : ""}">${escapeHtml(
-        note.type.toUpperCase()
-      )}</span><p>${escapeHtml(note.text)}</p></article>`
+      (tx) => `
+      <article class="card">
+        <h4>${escapeHtml(tx.type.toUpperCase())} ${tx.amount >= 0 ? "▲" : "▼"}</h4>
+        <p class="muted">${currency(tx.amount)} · ${escapeHtml(tx.source)} · Day ${tx.day} Turn ${tx.turn}</p>
+        <p class="muted">${escapeHtml(tx.description)}</p>
+      </article>
+    `
     )
     .join("");
+
+  const debugActive = state.meta.debugMode;
+  const debugPanel = debugActive
+    ? `
+      <section class="card">
+        <h3>Debug Mode</h3>
+        <div class="actions">
+          <button data-action="debug-money">+Money</button>
+          <button data-action="debug-xp">+XP</button>
+          <button data-action="debug-rep">+City Rep</button>
+          <button data-action="debug-district">Unlock Underground</button>
+          <button data-action="debug-quest">Complete Story-01</button>
+          <button data-action="debug-item">Add Medkit</button>
+          <button data-action="debug-vehicle">Add Sedan</button>
+          <button data-action="debug-property">Add Apartment</button>
+          <button data-action="debug-off">Disable Debug</button>
+        </div>
+      </section>
+    `
+    : "";
 
   root.innerHTML = `
     <section class="card marble">
-      <h2>More</h2>
-      <p class="muted">Quests, achievements, factions, businesses, and settings.</p>
+      <h2>Systems Hub</h2>
       <div class="actions">
-        <button data-action="return-city">Return to City</button>
+        <button data-action="casino-play" data-game="coinFlip">Coin Flip</button>
+        <button data-action="casino-play" data-game="highLow">High / Low</button>
+        <button data-action="casino-play" data-game="simpleDice">Simple Dice</button>
+        <button data-action="mark-all-notes">Mark Notifications Read</button>
+        <button data-action="return-city">Return City</button>
+        <button data-action="upgrade-safehouse">Upgrade Safehouse</button>
         <button data-action="reset-game">Reset Game</button>
+        ${debugActive ? "" : '<button data-action="debug-on">Enable Debug</button>'}
       </div>
     </section>
-    <section class="card"><h3>Quests</h3>${questsMarkup}</section>
-    <section class="card"><h3>Achievements</h3>${achievementsMarkup}</section>
-    <section class="card"><h3>Factions</h3>${factionsMarkup}</section>
-    <section class="card"><h3>Businesses</h3>${businessesMarkup}</section>
-    <section class="card"><h3>Notifications</h3>${toasts || '<p class="muted">No notifications.</p>'}</section>
+    <section class="card"><h3>Quests</h3>${quests}</section>
+    <section class="card"><h3>Achievements</h3>${achievements}</section>
+    <section class="card"><h3>Businesses</h3>${businesses}</section>
+    <section class="card"><h3>Factions</h3>${factions}</section>
+    <section class="card"><h3>Bank Transactions</h3>${transactions || '<p class="muted">No transactions yet.</p>'}</section>
+    <section class="card"><h3>Notification Center</h3>${notifications || '<p class="muted">No notifications.</p>'}</section>
+    ${debugPanel}
   `;
 }
 
@@ -442,17 +571,35 @@ root.addEventListener("click", (event) => {
   const button = event.target.closest("button[data-action]");
   if (!button) return;
 
-  const { action, districtId, locationId, actionId, amount, itemId, vehicleId, npcId, npcInteraction, businessId, price } = button.dataset;
+  const {
+    action,
+    districtId,
+    locationId,
+    actionId,
+    amount,
+    itemId,
+    vehicleId,
+    npcId,
+    npcInteraction,
+    businessId,
+    propertyId,
+    price,
+    game,
+    factionId,
+    noteId,
+    choiceId
+  } = button.dataset;
 
   if (action === "create-player") {
     const input = document.getElementById("player-name-input");
     createPlayer(state, input?.value || "");
     if (state.meta.hasCreatedCharacter) navigateTo(state, "city");
-  }
-
-  if (!state.meta.hasCreatedCharacter && action !== "create-player") {
+    persist();
+    render();
     return;
   }
+
+  if (!state.meta.hasCreatedCharacter) return;
 
   if (action === "travel") travelToDistrict(state, districtId);
   if (action === "enter-location") moveToLocation(state, districtId, locationId);
@@ -460,22 +607,46 @@ root.addEventListener("click", (event) => {
   if (action === "safehouse-rest") safehouseRest(state);
   if (action === "safehouse-energy") safehouseRecoverEnergy(state);
   if (action === "upgrade-safehouse") upgradeSafehouse(state);
-  if (action === "cool-heat") coolDistrictHeat(state, districtId);
-  if (action === "inspect-inventory") inspectInventory(state);
-  if (action === "inspect-storage") inspectStorage(state);
-  if (action === "return-city") returnToCity(state);
-  if (action === "bank-deposit") bankDeposit(state, Number(amount));
-  if (action === "bank-withdraw") bankWithdraw(state, Number(amount));
+  if (action === "cool-heat") coolDistrictHeat(state, districtId || state.selectedDistrictId);
+  if (action === "bank-deposit") bankDeposit(state, Number(amount || 200));
+  if (action === "bank-withdraw") bankWithdraw(state, Number(amount || 200));
   if (action === "use-item") useInventoryItem(state, itemId);
   if (action === "buy-item") buyMarketItem(state, itemId, Number(price));
   if (action === "sell-item") sellMarketItem(state, itemId, Number(price));
   if (action === "buy-vehicle") buyVehicle(state, vehicleId);
-  if (action === "select-vehicle") cycleVehicle(state);
+  if (action === "select-vehicle" && vehicleId) state.player.currentVehicleId = vehicleId;
+  if (action === "select-vehicle" && !vehicleId) cycleVehicle(state);
   if (action === "npc-action") interactWithNpc(state, npcId, npcInteraction);
   if (action === "business-action") runBusinessAction(state, businessId);
+  if (action === "business-upgrade") runBusinessAction(state, businessId, "upgrade");
+  if (action === "buy-property") buyProperty(state, propertyId);
+  if (action === "faction-action") runFactionAction(state, factionId);
+  if (action === "casino-play") casinoPlay(state, game, 150);
+  if (action === "claim-daily") claimDailyReward(state);
+  if (action === "event-choice") chooseEventChoice(state, choiceId);
+  if (action === "mark-note") markNotificationRead(state, noteId);
+  if (action === "mark-all-notes") markAllNotificationsRead(state);
+  if (action === "return-city") returnToCity(state);
+
+  if (action === "debug-on") {
+    toggleDebugMode(state, true);
+    localStorage.setItem("narcos-city-debug", "1");
+  }
+  if (action === "debug-off") {
+    toggleDebugMode(state, false);
+    localStorage.removeItem("narcos-city-debug");
+  }
+  if (action === "debug-money") debugAddMoney(state, 5000);
+  if (action === "debug-xp") debugAddXp(state, 240);
+  if (action === "debug-rep") debugChangeReputation(state, "city", 8);
+  if (action === "debug-district") debugUnlockDistrict(state, "underground");
+  if (action === "debug-quest") debugCompleteQuest(state, "story-01");
+  if (action === "debug-item") debugAddItem(state, "medkit", 3);
+  if (action === "debug-vehicle") debugAddVehicle(state, "sedan-classic");
+  if (action === "debug-property") debugAddProperty(state, "apt-oldtown");
 
   if (action === "reset-game") {
-    if (window.confirm("Reset game progress? This cannot be undone.")) {
+    if (window.confirm("Reset all progress?")) {
       state = resetGame();
       localStorage.removeItem(STORAGE_KEY);
     }
@@ -484,5 +655,9 @@ root.addEventListener("click", (event) => {
   persist();
   render();
 });
+
+if (localStorage.getItem("narcos-city-debug") === "1") {
+  toggleDebugMode(state, true);
+}
 
 render();
