@@ -54,6 +54,7 @@ import {
   upgradeSafehouse,
   useInventoryItem
 } from "./gameLogic.mjs";
+import { mountCityWorld3d } from "./cityWorld3d.js";
 
 const STORAGE_KEY = "narcos-city-state-v4";
 
@@ -70,6 +71,7 @@ let state = loadState();
 const root = document.getElementById("screen-root");
 const nav = document.getElementById("bottom-nav");
 const statusBar = document.getElementById("status-bar");
+let cityWorldSession = null;
 
 function persist() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
@@ -166,6 +168,10 @@ function renderEventPanel() {
 }
 
 function renderCity() {
+  if (cityWorldSession) {
+    cityWorldSession.destroy();
+    cityWorldSession = null;
+  }
   const district = getSelectedDistrict(state);
   const location = getCurrentLocation(state);
 
@@ -211,6 +217,11 @@ function renderCity() {
 
   root.innerHTML = `
     <section class="card marble">
+      <h2>Third-Person City World</h2>
+      <p class="muted">Walk physically through the district. Use ACTION near doors, NPCs, vehicles, and district markers.</p>
+      <div id="city-world-3d-container" class="city-world-3d-container"></div>
+    </section>
+    <section class="card marble">
       <h2>${escapeHtml(district.name)}</h2>
       <p class="muted">${escapeHtml(district.description)}</p>
       <p class="muted">Atmosphere: ${escapeHtml(district.atmosphere)} · Danger ${district.dangerLevel}/5 · Wealth ${district.wealthLevel}/5</p>
@@ -234,9 +245,55 @@ function renderCity() {
       ${npcCards || '<p class="muted">No contacts at this location.</p>'}
     </section>
   `;
+
+  const worldContainer = document.getElementById("city-world-3d-container");
+  cityWorldSession = mountCityWorld3d({
+    container: worldContainer,
+    state,
+    onInteract: (target) => {
+      if (!target) return;
+
+      if (target.interactionType === "district-marker") {
+        travelToDistrict(state, target.id);
+      }
+
+      if (target.interactionType === "door") {
+        if (target.districtId !== state.selectedDistrictId) {
+          travelToDistrict(state, target.districtId);
+        }
+        moveToLocation(state, target.districtId || state.selectedDistrictId, target.id);
+      }
+
+      if (target.interactionType === "npc") {
+        if (target.districtId !== state.selectedDistrictId) {
+          travelToDistrict(state, target.districtId);
+        }
+        if (target.locationId && state.currentLocationId !== target.locationId) {
+          moveToLocation(state, target.districtId || state.selectedDistrictId, target.locationId);
+        }
+        interactWithNpc(state, target.id, "talk");
+      }
+
+      if (target.interactionType === "vehicle") {
+        const owned = state.vehicles.find((entry) => entry.id === target.id)?.owned;
+        if (owned) {
+          state.player.currentVehicleId = target.id;
+        } else {
+          navigateTo(state, "inventory");
+        }
+      }
+
+      persist();
+      render();
+    }
+  });
 }
 
 function renderDistricts() {
+  if (cityWorldSession) {
+    cityWorldSession.destroy();
+    cityWorldSession = null;
+  }
   const currentVehicle = state.vehicles.find((entry) => entry.id === state.player.currentVehicleId);
   const cards = DISTRICTS.map((district) => {
     const selected = district.id === state.selectedDistrictId ? " active-location" : "";
@@ -270,6 +327,10 @@ function renderDistricts() {
 }
 
 function renderProfile() {
+  if (cityWorldSession) {
+    cityWorldSession.destroy();
+    cityWorldSession = null;
+  }
   const rep = state.player.reputation;
   const titleIndex = TITLE_RANKS.findIndex((rank) => rank.name === state.player.title);
 
@@ -322,6 +383,10 @@ function renderProfile() {
 }
 
 function renderInventory() {
+  if (cityWorldSession) {
+    cityWorldSession.destroy();
+    cityWorldSession = null;
+  }
   const inventoryCards = getInventoryEntries(state)
     .map(
       (item) => `
@@ -400,6 +465,10 @@ function renderInventory() {
 }
 
 function renderQuests() {
+  if (cityWorldSession) {
+    cityWorldSession.destroy();
+    cityWorldSession = null;
+  }
   const quests = state.quests
     .map(
       (quest) => `
@@ -614,6 +683,10 @@ function render() {
   });
 
   if (!state.meta.hasCreatedCharacter) {
+    if (cityWorldSession) {
+      cityWorldSession.destroy();
+      cityWorldSession = null;
+    }
     renderStatus();
     renderSetup();
     return;
