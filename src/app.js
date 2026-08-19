@@ -8,6 +8,7 @@ import {
   casinoPlay,
   chooseEventChoice,
   claimDailyReward,
+  claimDailyQuestReward,
   coolDistrictHeat,
   createInitialState,
   createPlayer,
@@ -22,8 +23,10 @@ import {
   debugUnlockDistrict,
   getBusinesses,
   getCurrentLocation,
+  getCrimeOperations,
   getFactionList,
   getInventoryEntries,
+  getJobs,
   getNpcsAtLocation,
   getProperties,
   getSelectedDistrict,
@@ -34,10 +37,15 @@ import {
   navigateTo,
   normalizeState,
   performLocationAction,
+  performPrisonAction,
+  repayCredit,
+  requestCredit,
   resetGame,
   returnToCity,
   runBusinessAction,
+  runCrimeOperation,
   runFactionAction,
+  runJobAction,
   safehouseRecoverEnergy,
   safehouseRest,
   sellMarketItem,
@@ -47,7 +55,7 @@ import {
   useInventoryItem
 } from "./gameLogic.mjs";
 
-const STORAGE_KEY = "narcos-city-state-v3";
+const STORAGE_KEY = "narcos-city-state-v4";
 
 function loadState() {
   try {
@@ -391,7 +399,7 @@ function renderInventory() {
   `;
 }
 
-function renderMore() {
+function renderQuests() {
   const quests = state.quests
     .map(
       (quest) => `
@@ -479,24 +487,90 @@ function renderMore() {
     )
     .join("");
 
+  const dailyQuests = (state.daily.quests || [])
+    .map(
+      (quest) => `
+      <article class="card${quest.completed && !quest.claimed ? " active-location" : ""}">
+        <h4>${escapeHtml(quest.title)}</h4>
+        <p class="muted">${escapeHtml(quest.description)}</p>
+        <p class="muted">Progress: ${quest.progress}/${quest.objective.required} · ${quest.claimed ? "Claimed" : quest.completed ? "Ready" : "In Progress"}</p>
+        <div class="actions">
+          ${quest.completed && !quest.claimed ? `<button data-action="claim-daily-quest" data-quest-id="${quest.id}">Claim Reward</button>` : ""}
+        </div>
+      </article>`
+    )
+    .join("");
+
+  const jobs = getJobs(state)
+    .map(
+      (job) => `
+      <article class="card">
+        <h4>${escapeHtml(job.name)}</h4>
+        <p class="muted">Level ${job.minLevel}+ · Energy ${job.energyCost} · Income ${currency(job.income)} · XP ${job.xp}</p>
+        <div class="actions">
+          <button data-action="job-action" data-job-id="${job.id}" ${state.player.level < job.minLevel ? "disabled" : ""}>Work Shift</button>
+        </div>
+      </article>`
+    )
+    .join("");
+
+  const operations = getCrimeOperations(state)
+    .map(
+      (operation) => `
+      <article class="card">
+        <h4>${escapeHtml(operation.name)}</h4>
+        <p class="muted">Req Street Rep ${operation.minStreetRep} · Risk ${Math.round(operation.risk * 100)}% · Reward ${currency(operation.rewardCash)}</p>
+        <div class="actions">
+          <button data-action="crime-operation" data-operation-id="${operation.id}" ${state.player.reputation.street < operation.minStreetRep ? "disabled" : ""}>Run Operation</button>
+        </div>
+      </article>`
+    )
+    .join("");
+
+  const prisonActions = (state.prisonActions || [])
+    .map(
+      (entry) => `
+      <button data-action="prison-action" data-prison-action-id="${entry.id}">${escapeHtml(entry.name)}</button>
+    `
+    )
+    .join("");
+
+  const prisonPanel = state.prison.active
+    ? `<section class="card active-location">
+      <h3>Prison Status</h3>
+      <p class="muted">${escapeHtml(state.prison.reason || "Detained")} · Remaining turns: ${state.prison.remainingTurns}</p>
+      <div class="actions">${prisonActions}</div>
+    </section>`
+    : `<section class="card"><h3>Prison Status</h3><p class="muted">No active prison sentence.</p></section>`;
+
+  const creditPanel = `
+    <section class="card">
+      <h3>Credit / Loan Foundation</h3>
+      <p class="muted">Debt ${currency(state.credit.debt)} · Limit ${currency(state.credit.creditLimit)} · Interest accrued ${currency(state.credit.interestAccrued)}</p>
+      <div class="actions">
+        <button data-action="credit-request" data-amount="500">Request $500</button>
+        <button data-action="credit-repay" data-amount="300">Repay $300</button>
+      </div>
+    </section>
+  `;
+
+  const foundationPanel = `
+    <section class="card">
+      <h3>Future Systems Foundation</h3>
+      <p class="muted">Telegram: ${state.telegram.adapter} · Premium: ${state.premium.membership} · Admin Role: ${state.admin.role}</p>
+      <p class="muted">Social: ${state.social.friends.length} friends / ${state.social.followers} followers · Romance partner: ${state.relationshipsFoundation.partnerId || "None"}</p>
+      <p class="muted">Background population in district: ${(state.backgroundPopulation[state.selectedDistrictId] || []).map((entry) => entry.role).join(", ") || "None"}</p>
+    </section>
+  `;
+
   const debugActive = state.meta.debugMode;
   const debugPanel = debugActive
-    ? `
-      <section class="card">
-        <h3>Debug Mode</h3>
-        <div class="actions">
-          <button data-action="debug-money">+Money</button>
-          <button data-action="debug-xp">+XP</button>
-          <button data-action="debug-rep">+City Rep</button>
-          <button data-action="debug-district">Unlock Underground</button>
-          <button data-action="debug-quest">Complete Story-01</button>
-          <button data-action="debug-item">Add Medkit</button>
-          <button data-action="debug-vehicle">Add Sedan</button>
-          <button data-action="debug-property">Add Apartment</button>
-          <button data-action="debug-off">Disable Debug</button>
-        </div>
-      </section>
-    `
+    ? `<section class="card"><h3>Debug Mode</h3><div class="actions">
+      <button data-action="debug-money">+Money</button><button data-action="debug-xp">+XP</button><button data-action="debug-rep">+City Rep</button>
+      <button data-action="debug-district">Unlock Underground</button><button data-action="debug-quest">Complete Story-01</button>
+      <button data-action="debug-item">Add Medkit</button><button data-action="debug-vehicle">Add Sedan</button>
+      <button data-action="debug-property">Add Apartment</button><button data-action="debug-off">Disable Debug</button>
+    </div></section>`
     : "";
 
   root.innerHTML = `
@@ -513,8 +587,14 @@ function renderMore() {
         ${debugActive ? "" : '<button data-action="debug-on">Enable Debug</button>'}
       </div>
     </section>
+    ${prisonPanel}
+    ${creditPanel}
+    ${foundationPanel}
+    <section class="card"><h3>Daily Quests</h3>${dailyQuests || '<p class="muted">No daily quests.</p>'}</section>
     <section class="card"><h3>Quests</h3>${quests}</section>
     <section class="card"><h3>Achievements</h3>${achievements}</section>
+    <section class="card"><h3>Work</h3>${jobs}</section>
+    <section class="card"><h3>Operations</h3>${operations}</section>
     <section class="card"><h3>Businesses</h3>${businesses}</section>
     <section class="card"><h3>Factions</h3>${factions}</section>
     <section class="card"><h3>Bank Transactions</h3>${transactions || '<p class="muted">No transactions yet.</p>'}</section>
@@ -551,8 +631,8 @@ function render() {
     case "inventory":
       renderInventory();
       break;
-    case "more":
-      renderMore();
+    case "quests":
+      renderQuests();
       break;
     default:
       renderCity();
@@ -587,7 +667,11 @@ root.addEventListener("click", (event) => {
     game,
     factionId,
     noteId,
-    choiceId
+    choiceId,
+    jobId,
+    operationId,
+    prisonActionId,
+    questId
   } = button.dataset;
 
   if (action === "create-player") {
@@ -621,8 +705,14 @@ root.addEventListener("click", (event) => {
   if (action === "business-upgrade") runBusinessAction(state, businessId, "upgrade");
   if (action === "buy-property") buyProperty(state, propertyId);
   if (action === "faction-action") runFactionAction(state, factionId);
+  if (action === "job-action") runJobAction(state, jobId);
+  if (action === "crime-operation") runCrimeOperation(state, operationId);
+  if (action === "prison-action") performPrisonAction(state, prisonActionId);
+  if (action === "credit-request") requestCredit(state, Number(amount || 500));
+  if (action === "credit-repay") repayCredit(state, Number(amount || 300));
   if (action === "casino-play") casinoPlay(state, game, 150);
   if (action === "claim-daily") claimDailyReward(state);
+  if (action === "claim-daily-quest") claimDailyQuestReward(state, questId);
   if (action === "event-choice") chooseEventChoice(state, choiceId);
   if (action === "mark-note") markNotificationRead(state, noteId);
   if (action === "mark-all-notes") markAllNotificationsRead(state);

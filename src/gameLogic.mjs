@@ -1,13 +1,18 @@
 import {
   ACHIEVEMENTS,
+  BACKGROUND_POPULATION_TEMPLATES,
   BALANCE,
   BUSINESSES,
+  CRIME_OPERATIONS,
+  DAILY_QUEST_TEMPLATES,
   DISTRICTS,
   EVENTS,
   FACTIONS,
   ITEMS,
+  JOBS,
   LOCATIONS,
   NPCS,
+  PRISON_ACTIONS,
   PROPERTIES,
   QUESTS,
   RELATIONSHIP_STATUSES,
@@ -29,6 +34,10 @@ function clone(value) {
 
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
+}
+
+function stateCreditLimitForLevel(level = 1) {
+  return Math.max(BALANCE.credit.maxCreditByLevel, Math.round((BALANCE.credit.maxCreditByLevel || 1000) + (Math.max(1, level) - 1) * 420));
 }
 
 function makeId(prefix = "id") {
@@ -137,6 +146,13 @@ function addInfluence(state, amount) {
 function adjustWanted(state, delta) {
   const next = clamp((state.player.wantedLevel || 0) + delta, 0, BALANCE.wanted.maxLevel);
   state.player.wantedLevel = next;
+  if (next >= BALANCE.wanted.maxLevel && !state.prison.active) {
+    state.prison.active = true;
+    state.prison.reason = "Wanted level reached maximum";
+    state.prison.remainingTurns = 3;
+    state.player.wantedLevel = Math.max(2, BALANCE.wanted.maxLevel - 2);
+    addNotification(state, "Police", "You were arrested and sent to prison.", "error");
+  }
 }
 
 function getDistrict(state, districtId) {
@@ -257,6 +273,8 @@ function getQuestMetric(state, objective) {
       return state.statistics.businessCollectCount;
     case "reach-influence":
       return state.player.influence;
+    case "daily-job":
+      return state.daily.dailyJobCount || 0;
     default:
       return 0;
   }
@@ -374,6 +392,37 @@ function dailyBusinessTick(state, days = 1) {
   }
 }
 
+function applyCreditInterest(state, days = 1) {
+  if (!state.credit?.debt || days <= 0) return;
+  const rate = BALANCE.credit.dailyInterestRate || 0;
+  for (let i = 0; i < days; i += 1) {
+    const interest = Math.max(0, Math.round(state.credit.debt * rate));
+    state.credit.debt += interest;
+    state.credit.interestAccrued += interest;
+  }
+}
+
+function tickPrison(state, turns = 1) {
+  if (!state.prison?.active) return;
+  state.prison.remainingTurns = Math.max(0, state.prison.remainingTurns - turns);
+  if (state.prison.remainingTurns === 0) {
+    state.prison.active = false;
+    addNotification(state, "System", "You were released from prison.", "success");
+  }
+}
+
+function refreshDailyQuests(state) {
+  if (state.daily.lastQuestRefreshDay === state.time.day && state.daily.quests.length) return;
+  state.daily.lastQuestRefreshDay = state.time.day;
+  state.daily.dailyJobCount = 0;
+  state.daily.quests = clone(DAILY_QUEST_TEMPLATES).map((entry) => ({
+    ...entry,
+    completed: false,
+    claimed: false,
+    progress: 0
+  }));
+}
+
 function nextTurn(state, turns = 1) {
   let remaining = Math.max(1, turns);
   while (remaining > 0) {
@@ -384,8 +433,11 @@ function nextTurn(state, turns = 1) {
       state.statistics.daysPlayed = state.time.day;
       state.daily.rewardClaimedDay = Math.min(state.daily.rewardClaimedDay, state.time.day - 1);
       dailyBusinessTick(state, 1);
+      applyCreditInterest(state, 1);
+      refreshDailyQuests(state);
       addNotification(state, "System", `A new day begins in NARCOS CITY (Day ${state.time.day}).`, "info");
     }
+    tickPrison(state, 1);
     remaining -= 1;
   }
   state.day = state.time.day;
@@ -478,6 +530,12 @@ function checkRequirements(state, requirements = {}) {
   return true;
 }
 
+function blockedByPrison(state) {
+  if (!state.prison?.active) return false;
+  addNotification(state, "System", `You are in prison for ${state.prison.remainingTurns} more turn(s).`, "error");
+  return true;
+}
+
 function applyActionRewards(state, reward = {}) {
   if (reward.cash) addWallet(state, reward.cash, "action", "Location action", reward.cash >= 0 ? "income" : "expense");
   if (reward.energy) state.player.energy = clamp(state.player.energy + reward.energy, 0, 100);
@@ -501,9 +559,21 @@ function applyActionRewards(state, reward = {}) {
   }
 }
 
+function refreshDailyQuestProgress(state) {
+  for (const quest of state.daily.quests || []) {
+    if (quest.completed) continue;
+    quest.progress = Math.min(quest.objective.required, getQuestMetric(state, quest.objective));
+    if (quest.progress >= quest.objective.required) {
+      quest.completed = true;
+      addNotification(state, "Quest", `Daily quest complete: ${quest.title}.`, "success");
+    }
+  }
+}
+
 function evaluatePostAction(state, reason = "action") {
   refreshQuests(state);
   refreshAchievements(state);
+  refreshDailyQuestProgress(state);
   if (state.player.wantedLevel > 0 && seededRandom(state) < state.player.wantedLevel * 0.05) {
     triggerEvent(state, "travel");
   } else {
@@ -524,6 +594,17 @@ export function createInitialState() {
   const firstLocationId = firstDistrict.locations[0];
   const factionRep = createFactionReputation();
   const inventory = Object.fromEntries(STARTER_INVENTORY.map((entry) => [entry.id, entry.quantity]));
+  const backgroundPopulation = Object.fromEntries(
+    Object.entries(BACKGROUND_POPULATION_TEMPLATES).map(([districtId, roles]) => [
+      districtId,
+      roles.map((role, index) => ({
+        id: `${districtId}-${role.toLowerCase().replace(/\s+/g, "-")}-${index + 1}`,
+        role,
+        mood: "neutral",
+        location: DISTRICTS.find((d) => d.id === districtId)?.locations[index % 4] || DISTRICTS[0].locations[0]
+      }))
+    ])
+  );
 
   const state = {
     currentScreen: "city",
@@ -581,6 +662,10 @@ export function createInitialState() {
     businesses: clone(BUSINESSES),
     factions: clone(FACTIONS),
     npcs: clone(NPCS),
+    jobs: clone(JOBS),
+    crimeOperations: clone(CRIME_OPERATIONS),
+    prisonActions: clone(PRISON_ACTIONS),
+    backgroundPopulation,
     relationships: createRelationships(),
     quests: clone(QUESTS).map((quest) => ({
       ...quest,
@@ -618,7 +703,54 @@ export function createInitialState() {
       rewardClaimedDay: 0,
       pendingBusinessIncome: {},
       casinoBetByDay: {},
-      dailyQuestRefreshDay: 1
+      dailyQuestRefreshDay: 1,
+      lastQuestRefreshDay: 0,
+      dailyJobCount: 0,
+      quests: []
+    },
+    prison: {
+      active: false,
+      reason: null,
+      remainingTurns: 0
+    },
+    credit: {
+      enabled: true,
+      debt: 0,
+      creditLimit: BALANCE.credit.maxCreditByLevel,
+      interestAccrued: 0
+    },
+    social: {
+      friends: [],
+      followers: 0,
+      messages: [],
+      gifts: [],
+      trades: []
+    },
+    relationshipsFoundation: {
+      romance: {},
+      partnerId: null,
+      marriage: null,
+      family: {
+        children: []
+      }
+    },
+    telegram: {
+      adapter: "none",
+      userId: null,
+      username: null,
+      firstName: null,
+      avatarUrl: null,
+      premiumStatus: false,
+      starsBalance: 0
+    },
+    premium: {
+      membership: "standard",
+      cosmeticsOwned: [],
+      vipUnlocked: false
+    },
+    admin: {
+      role: "PLAYER",
+      maintenanceMode: false
     },
     meta: {
       hasCreatedCharacter: false,
@@ -631,6 +763,7 @@ export function createInitialState() {
   };
 
   addNotification(state, "System", "Welcome to NARCOS CITY. Create your character to begin.");
+  refreshDailyQuests(state);
   refreshQuests(state);
   return state;
 }
@@ -650,6 +783,17 @@ function migrateState(rawState) {
     },
     time: { ...base.time, ...rawState.time },
     daily: { ...base.daily, ...rawState.daily },
+    prison: { ...base.prison, ...rawState.prison },
+    credit: { ...base.credit, ...rawState.credit },
+    social: { ...base.social, ...rawState.social },
+    relationshipsFoundation: {
+      ...base.relationshipsFoundation,
+      ...rawState.relationshipsFoundation,
+      family: { ...base.relationshipsFoundation.family, ...(rawState.relationshipsFoundation?.family || {}) }
+    },
+    telegram: { ...base.telegram, ...rawState.telegram },
+    premium: { ...base.premium, ...rawState.premium },
+    admin: { ...base.admin, ...rawState.admin },
     meta: { ...base.meta, ...rawState.meta },
     statistics: { ...base.statistics, ...rawState.statistics }
   };
@@ -661,6 +805,10 @@ function migrateState(rawState) {
   merged.businesses = Array.isArray(rawState.businesses) ? rawState.businesses : clone(BUSINESSES);
   merged.factions = Array.isArray(rawState.factions) ? rawState.factions : clone(FACTIONS);
   merged.npcs = Array.isArray(rawState.npcs) ? rawState.npcs : clone(NPCS);
+  merged.jobs = Array.isArray(rawState.jobs) ? rawState.jobs : clone(JOBS);
+  merged.crimeOperations = Array.isArray(rawState.crimeOperations) ? rawState.crimeOperations : clone(CRIME_OPERATIONS);
+  merged.prisonActions = Array.isArray(rawState.prisonActions) ? rawState.prisonActions : clone(PRISON_ACTIONS);
+  merged.backgroundPopulation = rawState.backgroundPopulation && typeof rawState.backgroundPopulation === "object" ? rawState.backgroundPopulation : clone(base.backgroundPopulation);
   merged.relationships = rawState.relationships && typeof rawState.relationships === "object" ? rawState.relationships : createRelationships();
   merged.quests = Array.isArray(rawState.quests)
     ? rawState.quests.map((quest) => ({ ...quest, objectives: (quest.objectives || []).map((obj) => ({ ...obj, progress: obj.progress || 0 })) }))
@@ -698,6 +846,7 @@ function migrateState(rawState) {
   merged.player.streetReputation = merged.player.reputation.street;
   merged.player.wantedLevel = clamp(merged.player.wantedLevel || merged.meta.wantedLevel || 0, 0, BALANCE.wanted.maxLevel);
   merged.meta.saveVersion = SAVE_VERSION;
+  merged.credit.creditLimit = Math.max(BALANCE.credit.maxCreditByLevel, stateCreditLimitForLevel(merged.player.level));
 
   const nowDay = epochDay();
   const elapsedDays = Math.max(0, nowDay - (merged.time.lastLoginDay || nowDay));
@@ -709,6 +858,8 @@ function migrateState(rawState) {
     addNotification(merged, "System", `${elapsedDays} in-game day(s) advanced while away.`, "info");
   }
   merged.time.lastLoginDay = nowDay;
+  applyCreditInterest(merged, elapsedDays);
+  refreshDailyQuests(merged);
 
   refreshQuests(merged);
   refreshAchievements(merged);
@@ -729,6 +880,7 @@ export function createPlayer(state, name) {
   state.meta.hasCreatedCharacter = true;
   state.player.currentDistrict = state.selectedDistrictId;
   state.player.currentLocation = state.currentLocationId;
+  state.credit.creditLimit = stateCreditLimitForLevel(state.player.level);
   addNotification(state, "System", `Welcome, ${state.player.name}. The city now knows your name.`, "success");
   refreshQuests(state);
   refreshAchievements(state);
@@ -740,7 +892,7 @@ export function resetGame() {
 }
 
 export function navigateTo(state, screen) {
-  const allowed = ["city", "districts", "profile", "inventory", "more"];
+  const allowed = ["city", "districts", "profile", "inventory", "quests"];
   state.currentScreen = allowed.includes(screen) ? screen : "city";
   return state;
 }
@@ -758,6 +910,7 @@ export function getNpcsAtLocation(state, locationId) {
 }
 
 export function travelToDistrict(state, districtId) {
+  if (blockedByPrison(state)) return state;
   const district = getDistrict(state, districtId);
   if (!district) {
     addNotification(state, "System", "District not found.", "error");
@@ -810,6 +963,7 @@ export function travelToDistrict(state, districtId) {
 }
 
 export function moveToLocation(state, districtId, locationId) {
+  if (blockedByPrison(state)) return state;
   const district = getDistrict(state, districtId);
   const location = getLocation(locationId);
   if (!district || !location || !district.locations.includes(locationId)) {
@@ -843,6 +997,7 @@ export function moveToLocation(state, districtId, locationId) {
 }
 
 export function performLocationAction(state, districtId, locationId, actionId) {
+  if (blockedByPrison(state)) return state;
   const district = getDistrict(state, districtId);
   const location = getLocation(locationId);
   const action = location?.actions.find((entry) => entry.id === actionId);
@@ -934,6 +1089,7 @@ export function chooseEventChoice(state, choiceId) {
 }
 
 export function interactWithNpc(state, npcId, interactionType = "talk", silent = false) {
+  if (blockedByPrison(state)) return state;
   const npc = state.npcs.find((entry) => entry.id === npcId);
   if (!npc) {
     addNotification(state, "Social", "NPC unavailable.", "error");
@@ -1002,6 +1158,7 @@ export function interactWithNpc(state, npcId, interactionType = "talk", silent =
 }
 
 export function safehouseRest(state, silent = false) {
+  if (blockedByPrison(state)) return state;
   state.player.energy = clamp(state.player.energy + BALANCE.energy.restRecover, 0, 100);
   state.player.health = clamp(state.player.health + BALANCE.health.restRecover, 0, 100);
   state.player.currentLocation = "safehouse";
@@ -1016,6 +1173,7 @@ export function safehouseRest(state, silent = false) {
 }
 
 export function safehouseRecoverEnergy(state, silent = false) {
+  if (blockedByPrison(state)) return state;
   state.player.energy = clamp(state.player.energy + BALANCE.energy.recoverEnergy, 0, 100);
   nextTurn(state, 1);
   addXP(state, 4);
@@ -1025,6 +1183,7 @@ export function safehouseRecoverEnergy(state, silent = false) {
 }
 
 export function upgradeSafehouse(state) {
+  if (blockedByPrison(state)) return state;
   const property = state.properties.find((entry) => entry.id === "safehouse-harbor") || state.properties[0];
   const cost = 2200 + state.player.level * 180;
   if (!addWallet(state, -cost, "property", "Safehouse upgrade", "expense")) {
@@ -1044,6 +1203,7 @@ export function upgradeSafehouse(state) {
 }
 
 export function coolDistrictHeat(state, districtId) {
+  if (blockedByPrison(state)) return state;
   const district = getDistrict(state, districtId);
   if (!district) {
     addNotification(state, "System", "District not found.", "error");
@@ -1064,6 +1224,7 @@ export function coolDistrictHeat(state, districtId) {
 }
 
 export function bankDeposit(state, amount = 200, silent = false) {
+  if (blockedByPrison(state)) return state;
   const value = Math.max(BALANCE.bank.depositMinimum, Math.round(Number(amount) || 0));
   if (!addWallet(state, -value, "bank", "Bank deposit", "expense")) {
     addNotification(state, "Economy", "Insufficient funds for deposit.", "error");
@@ -1081,6 +1242,7 @@ export function bankDeposit(state, amount = 200, silent = false) {
 }
 
 export function bankWithdraw(state, amount = 200, silent = false) {
+  if (blockedByPrison(state)) return state;
   const value = Math.max(BALANCE.bank.withdrawMinimum, Math.round(Number(amount) || 0));
   if (state.player.bankBalance < value) {
     addNotification(state, "Economy", "Insufficient bank balance.", "error");
@@ -1098,6 +1260,7 @@ export function bankWithdraw(state, amount = 200, silent = false) {
 }
 
 export function buyMarketItem(state, itemId, price, silent = false) {
+  if (blockedByPrison(state)) return state;
   const item = ITEM_BY_ID[itemId];
   if (!item) {
     addNotification(state, "Economy", "Item unavailable.", "error");
@@ -1121,6 +1284,7 @@ export function buyMarketItem(state, itemId, price, silent = false) {
 }
 
 export function sellMarketItem(state, itemId, value, silent = false) {
+  if (blockedByPrison(state)) return state;
   const item = ITEM_BY_ID[itemId];
   if (!item || !removeItem(state, itemId, 1)) {
     addNotification(state, "Economy", "Item not available to sell.", "error");
@@ -1138,6 +1302,7 @@ export function sellMarketItem(state, itemId, value, silent = false) {
 }
 
 export function useInventoryItem(state, itemId) {
+  if (blockedByPrison(state)) return state;
   const item = ITEM_BY_ID[itemId];
   if (!item || !hasItem(state, itemId, 1)) {
     addNotification(state, "Inventory", "Item not found.", "error");
@@ -1175,6 +1340,7 @@ export function useInventoryItem(state, itemId) {
 }
 
 export function buyVehicle(state, vehicleId) {
+  if (blockedByPrison(state)) return state;
   const vehicle = state.vehicles.find((entry) => entry.id === vehicleId);
   if (!vehicle) {
     addNotification(state, "Transport", "Vehicle not found.", "error");
@@ -1212,6 +1378,7 @@ export function cycleVehicle(state, silent = false) {
 }
 
 export function buyProperty(state, propertyId) {
+  if (blockedByPrison(state)) return state;
   const property = state.properties.find((entry) => entry.id === propertyId);
   if (!property) {
     addNotification(state, "Property", "Property not found.", "error");
@@ -1260,6 +1427,7 @@ function collectBusinessIncome(state, business) {
 }
 
 export function runBusinessAction(state, businessId, mode = "auto") {
+  if (blockedByPrison(state)) return state;
   const business = state.businesses.find((entry) => entry.id === businessId);
   if (!business) {
     addNotification(state, "Business", "Business not found.", "error");
@@ -1305,6 +1473,7 @@ export function runBusinessAction(state, businessId, mode = "auto") {
 }
 
 export function runFactionAction(state, factionId) {
+  if (blockedByPrison(state)) return state;
   const faction = state.factions.find((entry) => entry.id === factionId);
   if (!faction) {
     addNotification(state, "Faction", "Faction unavailable.", "error");
@@ -1339,6 +1508,7 @@ function increaseCasinoBetUsed(state, amount) {
 }
 
 export function casinoPlay(state, game = "coinFlip", desiredBet = 100) {
+  if (blockedByPrison(state)) return state;
   const maxRemaining = BALANCE.casino.dailyBetLimit - casinoBetLimitUsed(state);
   if (maxRemaining < BALANCE.casino.minBet) {
     addNotification(state, "Economy", "Daily casino limit reached.", "error");
@@ -1372,6 +1542,162 @@ export function casinoPlay(state, game = "coinFlip", desiredBet = 100) {
   nextTurn(state, 1);
   refreshQuests(state);
   refreshAchievements(state);
+  return state;
+}
+
+export function runJobAction(state, jobId) {
+  if (blockedByPrison(state)) return state;
+  const job = state.jobs.find((entry) => entry.id === jobId);
+  if (!job) {
+    addNotification(state, "Work", "Job not found.", "error");
+    return state;
+  }
+  if (state.player.level < job.minLevel) {
+    addNotification(state, "Work", `${job.name} unlocks at level ${job.minLevel}.`, "error");
+    return state;
+  }
+  if (state.player.energy < job.energyCost) {
+    addNotification(state, "Work", "Insufficient energy for this shift.", "error");
+    return state;
+  }
+
+  state.player.energy = clamp(state.player.energy - job.energyCost, 0, 100);
+  addWallet(state, job.income, "work", `${job.name} shift income`, "income");
+  addXP(state, job.xp);
+  if (job.reputation?.city) addGeneralReputation(state, "city", job.reputation.city);
+  if (job.reputation?.street) addGeneralReputation(state, "street", job.reputation.street);
+  if (job.reputation?.business) addGeneralReputation(state, "business", job.reputation.business);
+  if (job.reputation?.faction) addGeneralReputation(state, "faction", job.reputation.faction);
+  state.statistics.actionCounts["job-action"] = (state.statistics.actionCounts["job-action"] || 0) + 1;
+  state.statistics.totalActionsCompleted += 1;
+  state.daily.dailyJobCount = (state.daily.dailyJobCount || 0) + 1;
+  nextTurn(state, job.timeCost || 1);
+  evaluatePostAction(state, "action");
+  addNotification(state, "Work", `${job.name} completed for $${job.income}.`, "success");
+  return state;
+}
+
+export function runCrimeOperation(state, operationId) {
+  if (blockedByPrison(state)) return state;
+  const operation = state.crimeOperations.find((entry) => entry.id === operationId);
+  if (!operation) {
+    addNotification(state, "Event", "Operation not found.", "error");
+    return state;
+  }
+  if (state.player.reputation.street < operation.minStreetRep) {
+    addNotification(state, "Event", `Need street reputation ${operation.minStreetRep} for ${operation.name}.`, "error");
+    return state;
+  }
+  if (state.player.energy < operation.energyCost) {
+    addNotification(state, "Event", "Insufficient energy for operation.", "error");
+    return state;
+  }
+
+  state.player.energy = clamp(state.player.energy - operation.energyCost, 0, 100);
+  const success = seededRandom(state) > operation.risk;
+  if (success) {
+    addWallet(state, operation.rewardCash, "operation", operation.name, "income");
+    addXP(state, operation.rewardXp);
+    addGeneralReputation(state, "street", operation.reputationOnSuccess?.street || 0);
+    addGeneralReputation(state, "city", operation.reputationOnSuccess?.city || 0);
+    addGeneralReputation(state, "business", operation.reputationOnSuccess?.business || 0);
+    addGeneralReputation(state, "faction", operation.reputationOnSuccess?.faction || 0);
+    addNotification(state, "Event", `${operation.name} succeeded.`, "success");
+  } else {
+    adjustWanted(state, operation.wantedOnFail || 1);
+    state.player.health = clamp(state.player.health + (operation.healthOnFail || -8), 0, 100);
+    addXP(state, Math.max(6, Math.round(operation.rewardXp * 0.35)));
+    addNotification(state, "Event", `${operation.name} failed. Heat increased.`, "error");
+  }
+
+  state.statistics.actionCounts["crime-operation"] = (state.statistics.actionCounts["crime-operation"] || 0) + 1;
+  state.statistics.totalActionsCompleted += 1;
+  nextTurn(state, 1);
+  evaluatePostAction(state, "action");
+  return state;
+}
+
+export function performPrisonAction(state, actionId) {
+  if (!state.prison.active) {
+    addNotification(state, "System", "You are not in prison.", "info");
+    return state;
+  }
+  const action = state.prisonActions.find((entry) => entry.id === actionId);
+  if (!action) {
+    addNotification(state, "System", "Prison action not available.", "error");
+    return state;
+  }
+  if (action.cost && !addWallet(state, -action.cost, "prison", action.name, "expense")) {
+    addNotification(state, "Economy", "Insufficient cash for prison action.", "error");
+    return state;
+  }
+  if (action.energyChange) state.player.energy = clamp(state.player.energy + action.energyChange, 0, 100);
+  if (action.reputation?.city) addGeneralReputation(state, "city", action.reputation.city);
+  if (action.reputation?.street) addGeneralReputation(state, "street", action.reputation.street);
+  if (action.reputation?.faction) addGeneralReputation(state, "faction", action.reputation.faction);
+  if (action.wantedDelta) adjustWanted(state, action.wantedDelta);
+  state.prison.remainingTurns = Math.max(0, state.prison.remainingTurns - (action.turnsReduced || 1));
+  if (state.prison.remainingTurns === 0) {
+    state.prison.active = false;
+    state.prison.reason = null;
+    addNotification(state, "System", "Prison sentence completed.", "success");
+  } else {
+    addNotification(state, "System", `${action.name} used. ${state.prison.remainingTurns} turn(s) remain.`, "info");
+  }
+  nextTurn(state, 1);
+  refreshQuests(state);
+  refreshAchievements(state);
+  return state;
+}
+
+export function requestCredit(state, amount = BALANCE.credit.minRequest) {
+  const min = BALANCE.credit.minRequest;
+  const requestAmount = Math.max(min, Math.round(Number(amount) || min));
+  state.credit.creditLimit = stateCreditLimitForLevel(state.player.level);
+  const available = Math.max(0, state.credit.creditLimit - state.credit.debt);
+  if (requestAmount > available) {
+    addNotification(state, "Economy", `Credit request denied. Available: $${available}.`, "error");
+    return state;
+  }
+  state.credit.debt += requestAmount;
+  addWallet(state, requestAmount, "credit", "Credit payout", "income");
+  addNotification(state, "Economy", `Credit approved: $${requestAmount}.`, "success");
+  return state;
+}
+
+export function repayCredit(state, amount = BALANCE.credit.minRepay) {
+  if (!state.credit.debt) {
+    addNotification(state, "Economy", "No outstanding debt.", "info");
+    return state;
+  }
+  const repay = Math.max(BALANCE.credit.minRepay, Math.round(Number(amount) || BALANCE.credit.minRepay));
+  const payment = Math.min(repay, state.credit.debt);
+  if (!addWallet(state, -payment, "credit", "Credit repayment", "expense")) {
+    addNotification(state, "Economy", "Insufficient cash for repayment.", "error");
+    return state;
+  }
+  state.credit.debt = Math.max(0, state.credit.debt - payment);
+  addNotification(state, "Economy", `Debt repaid: $${payment}.`, "success");
+  return state;
+}
+
+export function claimDailyQuestReward(state, questId) {
+  const quest = (state.daily.quests || []).find((entry) => entry.id === questId);
+  if (!quest) {
+    addNotification(state, "Quest", "Daily quest not found.", "error");
+    return state;
+  }
+  if (!quest.completed) {
+    addNotification(state, "Quest", "Daily quest not yet complete.", "info");
+    return state;
+  }
+  if (quest.claimed) {
+    addNotification(state, "Quest", "Daily quest reward already claimed.", "info");
+    return state;
+  }
+  quest.claimed = true;
+  applyQuestRewards(state, quest.rewards || {});
+  addNotification(state, "Quest", `Daily reward claimed: ${quest.title}.`, "success");
   return state;
 }
 
@@ -1514,4 +1840,12 @@ export function getBusinesses(state) {
 
 export function getFactionList(state) {
   return state.factions;
+}
+
+export function getJobs(state) {
+  return state.jobs;
+}
+
+export function getCrimeOperations(state) {
+  return state.crimeOperations;
 }

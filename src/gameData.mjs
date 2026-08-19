@@ -1,4 +1,4 @@
-export const SAVE_VERSION = 3;
+export const SAVE_VERSION = 4;
 export const TURNS_PER_DAY = 8;
 
 export const BALANCE = {
@@ -37,6 +37,12 @@ export const BALANCE = {
   bank: {
     depositMinimum: 50,
     withdrawMinimum: 50
+  },
+  credit: {
+    maxCreditByLevel: 1800,
+    dailyInterestRate: 0.02,
+    minRequest: 300,
+    minRepay: 100
   },
   casino: {
     dailyBetLimit: 2000,
@@ -1146,3 +1152,60 @@ export const ACHIEVEMENTS = [
   { id: "ach-casino-2", name: "Cold Streak", description: "Win 5 casino games.", category: "Money", requirement: { type: "casino-wins", target: 5 }, reward: { cash: 220 } },
   { id: "ach-endurance", name: "Long Week", description: "Play 7 in-game days.", category: "Progression", requirement: { type: "days-played", target: 7 }, reward: { influence: 2 } }
 ];
+
+export const JOBS = [
+  { id: "job-restaurant", name: "Restaurant Worker", minLevel: 1, energyCost: 8, timeCost: 1, income: 220, xp: 14, reputation: { city: 1 } },
+  { id: "job-driver", name: "Driver", minLevel: 2, energyCost: 10, timeCost: 1, income: 280, xp: 16, reputation: { street: 1 } },
+  { id: "job-mechanic", name: "Mechanic", minLevel: 3, energyCost: 11, timeCost: 1, income: 340, xp: 18, reputation: { business: 1 } },
+  { id: "job-security", name: "Security", minLevel: 4, energyCost: 12, timeCost: 1, income: 410, xp: 20, reputation: { city: 1, faction: 1 } },
+  { id: "job-bartender", name: "Bartender", minLevel: 2, energyCost: 9, timeCost: 1, income: 260, xp: 15, reputation: { city: 1 } },
+  { id: "job-office", name: "Office Worker", minLevel: 5, energyCost: 13, timeCost: 1, income: 500, xp: 24, reputation: { business: 2 } }
+];
+
+export const CRIME_OPERATIONS = [
+  { id: "op-smuggling", name: "Smuggling Mission", minStreetRep: 8, energyCost: 12, risk: 0.45, rewardCash: 520, rewardXp: 28, wantedOnFail: 1, healthOnFail: -10, reputationOnSuccess: { street: 2 } },
+  { id: "op-heist-prep", name: "Heist Preparation", minStreetRep: 12, energyCost: 11, risk: 0.4, rewardCash: 460, rewardXp: 24, wantedOnFail: 1, healthOnFail: -8, reputationOnSuccess: { faction: 1, business: 1 } },
+  { id: "op-underground-delivery", name: "Underground Delivery", minStreetRep: 14, energyCost: 13, risk: 0.5, rewardCash: 620, rewardXp: 30, wantedOnFail: 2, healthOnFail: -14, reputationOnSuccess: { street: 3, faction: 1 } },
+  { id: "op-intel-job", name: "Intelligence Job", minStreetRep: 6, energyCost: 9, risk: 0.3, rewardCash: 340, rewardXp: 18, wantedOnFail: 1, healthOnFail: -6, reputationOnSuccess: { city: 1, faction: 1 } },
+  { id: "op-protection", name: "Protection Job", minStreetRep: 10, energyCost: 10, risk: 0.35, rewardCash: 400, rewardXp: 21, wantedOnFail: 1, healthOnFail: -8, reputationOnSuccess: { business: 1, faction: 1 } },
+  { id: "op-black-market", name: "Black Market Deal", minStreetRep: 16, energyCost: 14, risk: 0.55, rewardCash: 760, rewardXp: 34, wantedOnFail: 2, healthOnFail: -15, reputationOnSuccess: { street: 3, business: 1 } }
+];
+
+export const PRISON_ACTIONS = [
+  { id: "serve-turn", name: "Serve Time", turnsReduced: 1, energyChange: 4, reputation: { street: -1 } },
+  { id: "legal-call", name: "Legal Call", turnsReduced: 2, cost: 250, reputation: { city: 1 } },
+  { id: "quiet-deal", name: "Quiet Deal", turnsReduced: 1, cost: 180, reputation: { faction: 1, street: 1 }, wantedDelta: -1 }
+];
+
+export const DAILY_QUEST_TEMPLATES = [
+  {
+    id: "daily-talk-two",
+    title: "Daily Network",
+    description: "Talk to 2 NPCs today.",
+    objective: { type: "talk-to-npc", target: "any", required: 2 },
+    rewards: { cash: 180, xp: 16 }
+  },
+  {
+    id: "daily-action-three",
+    title: "Daily Hustle",
+    description: "Complete 3 actions today.",
+    objective: { type: "complete-action", target: "any", required: 3 },
+    rewards: { cash: 220, xp: 18, cityReputation: 1 }
+  },
+  {
+    id: "daily-work-once",
+    title: "Daily Shift",
+    description: "Complete one legal job today.",
+    objective: { type: "daily-job", target: "any", required: 1 },
+    rewards: { cash: 240, xp: 18, businessReputation: 1 }
+  }
+];
+
+export const BACKGROUND_POPULATION_TEMPLATES = {
+  downtown: ["Pedestrians", "Investors", "Hotel Guests", "Security"],
+  "old-town": ["Market Vendors", "Street Characters", "Bar Guests", "Drivers"],
+  harbor: ["Dock Workers", "Cargo Drivers", "Club Guests", "Security"],
+  industrial: ["Factory Workers", "Mechanics", "Logistics Staff", "Inspectors"],
+  "rich-district": ["Club Members", "Private Staff", "Luxury Customers", "Security"],
+  underground: ["Fixers", "Runners", "Faction Scouts", "Underground Guests"]
+};

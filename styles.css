@@ -22,6 +22,7 @@ body {
   background: linear-gradient(180deg, #070708, #101015 45%, #190f1c);
   color: var(--ink);
   font-family: Inter, "Segoe UI", sans-serif;
+  overflow-x: hidden;
 }
 
 .app-shell {
@@ -85,7 +86,7 @@ body {
 
 main {
   padding: 0.85rem;
-  padding-bottom: 5.4rem;
+  padding-bottom: calc(5.4rem + env(safe-area-inset-bottom, 0px));
   flex: 1;
   transition: opacity 0.16s ease, transform 0.16s ease;
 }
@@ -217,7 +218,7 @@ input {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 0.34rem;
-  padding: 0.55rem;
+  padding: 0.55rem 0.55rem calc(0.55rem + env(safe-area-inset-bottom, 0px));
   border-top: 1px solid rgba(181, 154, 95, 0.22);
   background: rgba(8, 8, 10, 0.95);
 }

@@ -8,6 +8,7 @@ import {
   buyVehicle,
   casinoPlay,
   claimDailyReward,
+  claimDailyQuestReward,
   coolDistrictHeat,
   createInitialState,
   createPlayer,
@@ -17,8 +18,13 @@ import {
   moveToLocation,
   normalizeState,
   performLocationAction,
+  performPrisonAction,
+  repayCredit,
+  requestCredit,
   runBusinessAction,
+  runCrimeOperation,
   runFactionAction,
+  runJobAction,
   safehouseRest,
   travelToDistrict,
   useInventoryItem
@@ -26,11 +32,14 @@ import {
 
 test("initial state has stage2 structures", () => {
   const state = createInitialState();
-  assert.equal(state.meta.saveVersion, 3);
+  assert.equal(state.meta.saveVersion, 4);
   assert.equal(state.districts.length, 6);
   assert.ok(state.marketCatalog.length >= 10);
   assert.equal(state.player.wantedLevel, 0);
   assert.ok(Array.isArray(state.transactions));
+  assert.ok(Array.isArray(state.jobs));
+  assert.ok(Array.isArray(state.crimeOperations));
+  assert.ok(Array.isArray(state.daily.quests));
 });
 
 test("character creation unlocks gameplay", () => {
@@ -127,7 +136,7 @@ test("normalize migrates old saves and keeps safe defaults", () => {
   const migrated = normalizeState({ player: { name: "Old", money: 200 }, time: { day: 3, turn: 2 }, inventory: [{ id: "medkit", quantity: 1 }] });
   assert.equal(migrated.player.name, "Old");
   assert.equal(typeof migrated.inventory, "object");
-  assert.ok(migrated.meta.saveVersion === 3);
+  assert.ok(migrated.meta.saveVersion === 4);
 });
 
 test("safehouse rest restores resources and advances time", () => {
@@ -140,4 +149,42 @@ test("safehouse rest restores resources and advances time", () => {
   assert.ok(state.player.energy > 10);
   assert.ok(state.player.health > 20);
   assert.ok(state.time.day >= dayBefore);
+});
+
+test("jobs and operations drive progression loops", () => {
+  const state = createInitialState();
+  createPlayer(state, "Rico");
+  state.player.level = 5;
+  state.player.energy = 100;
+  state.player.reputation.street = 20;
+  const moneyBefore = state.player.money;
+  runJobAction(state, "job-office");
+  assert.ok(state.player.money > moneyBefore);
+  runCrimeOperation(state, "op-intel-job");
+  assert.ok(state.statistics.actionCounts["crime-operation"] >= 1);
+});
+
+test("credit and prison systems are actionable", () => {
+  const state = createInitialState();
+  createPlayer(state, "Rico");
+  requestCredit(state, 500);
+  assert.ok(state.credit.debt >= 500);
+  const moneyBeforeRepay = state.player.money;
+  repayCredit(state, 300);
+  assert.ok(state.player.money < moneyBeforeRepay);
+
+  state.prison.active = true;
+  state.prison.remainingTurns = 2;
+  performPrisonAction(state, "serve-turn");
+  assert.ok(state.prison.remainingTurns <= 1);
+});
+
+test("daily quest rewards can be claimed once completed", () => {
+  const state = createInitialState();
+  createPlayer(state, "Rico");
+  const dailyQuest = state.daily.quests.find((entry) => entry.id === "daily-talk-two");
+  interactWithNpc(state, "npc-banker-1", "talk");
+  interactWithNpc(state, "npc-bartender-1", "talk");
+  claimDailyQuestReward(state, dailyQuest.id);
+  assert.equal(dailyQuest.claimed, true);
 });
