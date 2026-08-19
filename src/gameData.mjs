@@ -1,4 +1,4 @@
-export const SAVE_VERSION = 5;
+export const SAVE_VERSION = 6;
 export const TURNS_PER_DAY = 8;
 
 export const BALANCE = {
@@ -193,6 +193,36 @@ export const DISTRICTS = [
     npcs: ["npc-underground-contact-1", "npc-security-boss-1"],
     randomEvents: ["event-police-check", "event-business-opportunity"],
     availableQuests: ["quest-tools-up"]
+  },
+  {
+    id: "business-district",
+    name: "BUSINESS DISTRICT",
+    description: "Corporate towers, legal firms, and premium commercial assets.",
+    atmosphere: "Formal wealth, negotiations, and high-value contracts.",
+    dangerLevel: 3,
+    wealthLevel: 5,
+    reputationRequirement: 14,
+    travelCost: 118,
+    travelTime: 1,
+    locations: ["office-complex", "corporate-hotel", "legal-office", "business-hub"],
+    npcs: ["npc-lawyer-1", "npc-business-assistant-1", "npc-property-manager-1"],
+    randomEvents: ["event-business-opportunity", "event-elite-introduction"],
+    availableQuests: ["story-07", "quest-grow-influence"]
+  },
+  {
+    id: "outskirts",
+    name: "OUTSKIRTS",
+    description: "Service roads, hidden stops, and expansion corridors outside the urban core.",
+    atmosphere: "Sparse traffic, low visibility, and strategic routes.",
+    dangerLevel: 4,
+    wealthLevel: 2,
+    reputationRequirement: 10,
+    travelCost: 96,
+    travelTime: 2,
+    locations: ["service-garage", "roadside-market", "driver-hub", "hidden-yard"],
+    npcs: ["npc-driver-1", "npc-doctor-1", "npc-faction-contact-1"],
+    randomEvents: ["event-smuggling-opportunity", "event-police-check"],
+    availableQuests: ["quest-harbor-route", "quest-tools-up"]
   }
 ];
 
@@ -537,6 +567,118 @@ export const LOCATIONS = {
     rewards: { cityReputation: 1 },
     possibleEvents: ["event-friendly-tip"]
   },
+  "office-complex": {
+    id: "office-complex",
+    districtId: "business-district",
+    name: "Office Complex",
+    description: "Corporate offices prepared for legal and investment operations.",
+    requirements: { businessReputation: 6 },
+    actions: [
+      { id: "office-contract", name: "Negotiate Contract", type: "business-action", reward: { businessReputation: 2, influence: 2 }, energyCost: 6, xpGain: 18 },
+      { id: "office-briefing", name: "Executive Briefing", type: "social", reward: { intelligence: 2, cityReputation: 1 }, energyCost: 5, xpGain: 14 }
+    ],
+    npcs: ["npc-business-assistant-1", "npc-investor-2"],
+    rewards: { businessReputation: 2 },
+    possibleEvents: ["event-business-opportunity"]
+  },
+  "corporate-hotel": {
+    id: "corporate-hotel",
+    districtId: "business-district",
+    name: "Corporate Hotel",
+    description: "Executive stays, conferences, and discreet meetings.",
+    requirements: { cityReputation: 10 },
+    actions: [
+      { id: "corporate-host", name: "Host Corporate Meeting", type: "social", reward: { relationship: 2, businessReputation: 1 }, energyCost: 5, xpGain: 14 },
+      { id: "corporate-rest", name: "Recover in Suite", type: "rest", cost: 220, reward: { energy: 26, health: 14 }, energyCost: 0, xpGain: 10 }
+    ],
+    npcs: ["npc-hotel-manager-1", "npc-property-manager-1"],
+    rewards: { cityReputation: 1 },
+    possibleEvents: ["event-elite-introduction"]
+  },
+  "legal-office": {
+    id: "legal-office",
+    districtId: "business-district",
+    name: "Legal Office",
+    description: "Risk mitigation, contracts, and strategic legal advice.",
+    requirements: { cityReputation: 9 },
+    actions: [
+      { id: "legal-advice", name: "Seek Legal Advice", type: "city-action", reward: { cityReputation: 1, intelligence: 1 }, cost: 160, energyCost: 3, xpGain: 10 },
+      { id: "legal-brief", name: "Case Briefing", type: "business-action", reward: { businessReputation: 1, influence: 1 }, energyCost: 4, xpGain: 12 }
+    ],
+    npcs: ["npc-lawyer-1"],
+    rewards: { cityReputation: 1 },
+    possibleEvents: ["event-friendly-tip"]
+  },
+  "business-hub": {
+    id: "business-hub",
+    districtId: "business-district",
+    name: "Business Hub",
+    description: "Commercial properties, offices, and financial connectors.",
+    requirements: { businessReputation: 5 },
+    actions: [
+      { id: "hub-property", name: "Review Property Deals", type: "business-action", reward: { businessReputation: 2 }, energyCost: 5, xpGain: 14 },
+      { id: "hub-network", name: "Corporate Networking", type: "social", reward: { charisma: 1, relationship: 2 }, energyCost: 4, xpGain: 12 }
+    ],
+    npcs: ["npc-property-manager-1", "npc-shop-owner-1"],
+    rewards: { businessReputation: 1 },
+    possibleEvents: ["event-business-opportunity"]
+  },
+  "service-garage": {
+    id: "service-garage",
+    districtId: "outskirts",
+    name: "Service Garage",
+    description: "Peripheral mechanical support and long-route prep.",
+    requirements: { streetReputation: 6 },
+    actions: [
+      { id: "service-repair", name: "Repair Run", type: "work", reward: { cash: 260, businessReputation: 1 }, energyCost: 6, xpGain: 14 },
+      { id: "service-tune", name: "Tune Engine", type: "transport-action", reward: { influence: 1 }, energyCost: 3, xpGain: 8 }
+    ],
+    npcs: ["npc-mechanic-1", "npc-driver-1"],
+    rewards: { businessReputation: 1 },
+    possibleEvents: ["event-equipment-failure"]
+  },
+  "roadside-market": {
+    id: "roadside-market",
+    districtId: "outskirts",
+    name: "Roadside Market",
+    description: "Transit market with practical supplies and low-profile exchange.",
+    requirements: { cityReputation: 4 },
+    actions: [
+      { id: "roadside-buy", name: "Buy Supplies", type: "market-buy", itemId: "energy-drink", cost: 70, energyCost: 1, xpGain: 4 },
+      { id: "roadside-social", name: "Talk to Locals", type: "social", reward: { streetReputation: 1 }, energyCost: 3, xpGain: 8 }
+    ],
+    npcs: ["npc-shop-owner-1", "npc-faction-contact-1"],
+    rewards: { streetReputation: 1 },
+    possibleEvents: ["event-citizen-help"]
+  },
+  "driver-hub": {
+    id: "driver-hub",
+    districtId: "outskirts",
+    name: "Driver Hub",
+    description: "Inter-district transport stop with route contracts.",
+    requirements: { streetReputation: 7 },
+    actions: [
+      { id: "driver-route", name: "Take Route Contract", type: "work", reward: { cash: 300, streetReputation: 1 }, energyCost: 7, xpGain: 15 },
+      { id: "driver-intel", name: "Gather Route Intel", type: "faction-action", reward: { factionReputation: 1 }, energyCost: 4, xpGain: 10 }
+    ],
+    npcs: ["npc-driver-1"],
+    rewards: { streetReputation: 1 },
+    possibleEvents: ["event-smuggling-opportunity"]
+  },
+  "hidden-yard": {
+    id: "hidden-yard",
+    districtId: "outskirts",
+    name: "Hidden Yard",
+    description: "Low-visibility expansion site and covert staging point.",
+    requirements: { factionReputation: 8 },
+    actions: [
+      { id: "yard-stash", name: "Secure Stash", type: "faction-action", reward: { factionReputation: 2, influence: 1 }, energyCost: 5, xpGain: 14 },
+      { id: "yard-watch", name: "Perimeter Watch", type: "city-action", reward: { cityReputation: 1 }, energyCost: 4, xpGain: 10 }
+    ],
+    npcs: ["npc-security-boss-1", "npc-faction-contact-1"],
+    rewards: { factionReputation: 1 },
+    possibleEvents: ["event-ambush"]
+  },
   "safehouse-compound": {
     id: "safehouse-compound",
     districtId: "safehouse-area",
@@ -808,7 +950,7 @@ export const NPCS = [
     name: "Galen Ward",
     role: "wealthy investor",
     district: "industrial",
-    location: "small-businesses",
+    location: "factory",
     personality: "analytical",
     relationship: 0,
     faction: "royals",
@@ -862,6 +1004,114 @@ export const NPCS = [
     faction: "iron-wolves",
     dialogue: ["Loyalty is the only accepted currency here."],
     availableActions: ["talk", "work-together", "complete-quest"]
+  },
+  {
+    id: "npc-faction-contact-1",
+    name: "Adrian Vale",
+    role: "faction contact",
+    district: "outskirts",
+    location: "hidden-yard",
+    personality: "connected",
+    relationship: 0,
+    faction: "iron-wolves",
+    dialogue: ["Routes change nightly. Contacts stay valuable."],
+    availableActions: ["talk", "socialize", "work-together", "complete-quest"]
+  },
+  {
+    id: "npc-lawyer-1",
+    name: "Mila Serrin",
+    role: "lawyer",
+    district: "business-district",
+    location: "legal-office",
+    personality: "precise",
+    relationship: 0,
+    faction: "old-guard",
+    dialogue: ["A clean contract saves more than a loaded weapon."],
+    availableActions: ["talk", "help", "work-together"]
+  },
+  {
+    id: "npc-doctor-1",
+    name: "Dr. Leon Arkwright",
+    role: "doctor",
+    district: "outskirts",
+    location: "service-garage",
+    personality: "composed",
+    relationship: 0,
+    faction: "black-harbor",
+    dialogue: ["Keep your people healthy and your operation survives."],
+    availableActions: ["talk", "help", "give-gift"]
+  },
+  {
+    id: "npc-stylist-1",
+    name: "Vera Nyholm",
+    role: "stylist",
+    district: "downtown",
+    location: "shopping-area",
+    personality: "confident",
+    relationship: 0,
+    faction: "royals",
+    dialogue: ["Presentation is leverage in silk form."],
+    availableActions: ["talk", "socialize", "give-gift"]
+  },
+  {
+    id: "npc-shop-owner-1",
+    name: "Tomás Vieri",
+    role: "shop owner",
+    district: "old-town",
+    location: "small-businesses",
+    personality: "careful",
+    relationship: 0,
+    faction: "old-guard",
+    dialogue: ["Margins are thin. Trust is priceless."],
+    availableActions: ["talk", "help", "work-together"]
+  },
+  {
+    id: "npc-property-manager-1",
+    name: "Clara Duval",
+    role: "property manager",
+    district: "business-district",
+    location: "business-hub",
+    personality: "organized",
+    relationship: 0,
+    faction: "royals",
+    dialogue: ["Location and timing decide everything in this city."],
+    availableActions: ["talk", "socialize", "work-together"]
+  },
+  {
+    id: "npc-driver-1",
+    name: "Rico Arden",
+    role: "driver",
+    district: "outskirts",
+    location: "driver-hub",
+    personality: "fast-thinking",
+    relationship: 0,
+    faction: "black-harbor",
+    dialogue: ["I know shortcuts nobody writes down."],
+    availableActions: ["talk", "help", "work-together", "complete-quest"]
+  },
+  {
+    id: "npc-business-assistant-1",
+    name: "Nadia Kross",
+    role: "business assistant",
+    district: "business-district",
+    location: "office-complex",
+    personality: "efficient",
+    relationship: 0,
+    faction: "royals",
+    dialogue: ["Calendars move cities more than rumors do."],
+    availableActions: ["talk", "socialize", "help"]
+  },
+  {
+    id: "npc-investor-3",
+    name: "Lucien Marat",
+    role: "investor",
+    district: "business-district",
+    location: "office-complex",
+    personality: "sharp",
+    relationship: 0,
+    faction: "royals",
+    dialogue: ["Capital rewards discipline, not noise."],
+    availableActions: ["talk", "socialize", "work-together", "give-gift"]
   }
 ];
 
@@ -1322,5 +1572,7 @@ export const BACKGROUND_POPULATION_TEMPLATES = {
   "rich-district": ["Club Members", "Private Staff", "Luxury Customers", "Security"],
   underground: ["Fixers", "Runners", "Faction Scouts", "Underground Guests"],
   residential: ["Residents", "Vendors", "Courier Riders", "Families"],
-  "safehouse-area": ["Guards", "Mechanics", "Operators", "Drivers"]
+  "safehouse-area": ["Guards", "Mechanics", "Operators", "Drivers"],
+  "business-district": ["Business Workers", "Corporate Staff", "Service Workers", "Security"],
+  outskirts: ["Drivers", "Workers", "Service Workers", "Tourists"]
 };

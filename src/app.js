@@ -57,14 +57,15 @@ import {
 import { mountCityWorld3d } from "./cityWorld3d.js";
 import { createDistrictAnchors } from "./cityWorldFoundation.mjs";
 import { createAudioManager } from "./audioManager.mjs";
+import { cityWorldText, DEFAULT_LANGUAGE, getLanguage, t } from "./i18n.mjs";
 
-const STORAGE_KEY = "narcos-city-state-v5";
+const STORAGE_KEY = "narcos-city-state-v6";
 const APP_SETTINGS_KEY = "narcos-city-settings-v1";
 const LOADING_MS = 900;
 
 function loadState() {
   try {
-    const saved = localStorage.getItem(STORAGE_KEY) || localStorage.getItem("narcos-city-state-v4");
+    const saved = localStorage.getItem(STORAGE_KEY) || localStorage.getItem("narcos-city-state-v5") || localStorage.getItem("narcos-city-state-v4");
     return saved ? normalizeState(JSON.parse(saved)) : createInitialState();
   } catch {
     return createInitialState();
@@ -80,6 +81,7 @@ try {
 } catch {
   // Ignore.
 }
+state.settings.language = ["ru", "en"].includes(state.settings.language) ? state.settings.language : DEFAULT_LANGUAGE;
 const root = document.getElementById("screen-root");
 const nav = document.getElementById("bottom-nav");
 const statusBar = document.getElementById("status-bar");
@@ -92,6 +94,25 @@ let runtimeNotice = "";
 function setGameplayMode(active) {
   document.body.classList.toggle("gameplay-mode", !!active);
   document.body.classList.toggle("no-page-scroll", !!active);
+}
+
+function applyLocalizedShell() {
+  const lang = getLanguage(state);
+  document.documentElement.lang = lang;
+  const subtitle = document.querySelector(".subtitle");
+  if (subtitle) subtitle.textContent = lang === "ru" ? "Империя шёлка, стали и теней" : "Empire of Silk, Steel, and Shadows";
+  const navLabels = [
+    ["city", t(state, "nav.city", "CITY")],
+    ["districts", t(state, "nav.map", "MAP")],
+    ["quests", t(state, "nav.quests", "QUESTS")],
+    ["inventory", t(state, "nav.inventory", "INVENTORY")],
+    ["profile", t(state, "nav.profile", "PROFILE")],
+    ["settings", t(state, "nav.settings", "SETTINGS")]
+  ];
+  navLabels.forEach(([screen, label]) => {
+    const button = nav.querySelector(`button[data-screen="${screen}"]`);
+    if (button) button.textContent = label;
+  });
 }
 
 function persist() {
@@ -171,16 +192,17 @@ function renderStatus() {
 }
 
 function renderSetup() {
+  const isRu = getLanguage(state) === "ru";
   root.innerHTML = `
     <section class="card marble">
       <h2>NARCOS CITY — CHAPTER 1</h2>
-      <p class="muted">The City Knows Your Name.</p>
+      <p class="muted">${isRu ? "Город узнает ваше имя." : "The City Knows Your Name."}</p>
       <label class="field">
-        <span>Character Name</span>
-        <input id="player-name-input" maxlength="24" placeholder="Enter your name" />
+        <span>${isRu ? "Имя персонажа" : "Character Name"}</span>
+        <input id="player-name-input" maxlength="24" placeholder="${isRu ? "Введите имя" : "Enter your name"}" />
       </label>
       <div class="actions">
-        <button data-action="create-player">Enter City</button>
+        <button data-action="create-player">${t(state, "menu.enter", "Enter City")}</button>
       </div>
     </section>
   `;
@@ -198,28 +220,29 @@ function renderLoading() {
 
 function renderMainMenu() {
   const hasSave = !!state?.meta?.hasCreatedCharacter;
+  const isRu = getLanguage(state) === "ru";
   root.innerHTML = `
     <section class="card marble menu-card">
       <h2>NARCOS CITY</h2>
-      <p class="muted">Empire of Silk, Steel, and Shadows</p>
+      <p class="muted">${isRu ? "Империя шёлка, стали и теней" : "Empire of Silk, Steel, and Shadows"}</p>
       <div class="actions menu-actions">
-        <button data-action="menu-new-game">PLAY</button>
-        <button data-action="menu-continue" ${hasSave ? "" : "disabled"}>CONTINUE</button>
-        <button data-action="menu-profile">PROFILE</button>
-        <button data-action="menu-settings">SETTINGS</button>
+        <button data-action="menu-new-game">${t(state, "menu.play", "PLAY")}</button>
+        <button data-action="menu-continue" ${hasSave ? "" : "disabled"}>${t(state, "menu.continue", "CONTINUE")}</button>
+        <button data-action="menu-profile">${t(state, "menu.profile", "PROFILE")}</button>
+        <button data-action="menu-settings">${t(state, "menu.settings", "SETTINGS")}</button>
       </div>
     </section>
     ${
       !state.meta.hasCreatedCharacter
         ? `<section class="card">
-        <h3>Create Character</h3>
+        <h3>${t(state, "menu.create", "Create Character")}</h3>
         <p class="muted">Start as La Reina · Queen · Active</p>
         <label class="field">
-          <span>Character Name</span>
+          <span>${isRu ? "Имя персонажа" : "Character Name"}</span>
           <input id="player-name-input" maxlength="24" value="${escapeHtml(state.player.name || "La Reina")}" />
         </label>
         <div class="actions">
-          <button data-action="create-player">Enter City</button>
+          <button data-action="create-player">${t(state, "menu.enter", "Enter City")}</button>
         </div>
       </section>`
         : ""
@@ -229,27 +252,34 @@ function renderMainMenu() {
 
 function renderSettings() {
   const s = state.settings || {};
+  const isRu = getLanguage(state) === "ru";
   root.innerHTML = `
     <section class="card marble">
-      <h2>Settings</h2>
-      <p class="muted">Tune performance and control feel for mobile play.</p>
-      <label class="field"><span>Graphics Quality</span>
+      <h2>${t(state, "settings.title", "Settings")}</h2>
+      <p class="muted">${isRu ? "Настройте производительность и управление для мобильной игры." : "Tune performance and control feel for mobile play."}</p>
+      <label class="field"><span>${t(state, "settings.language", "Language")}</span>
+        <select id="setting-language">
+          <option value="ru" ${getLanguage(state) === "ru" ? "selected" : ""}>Русский</option>
+          <option value="en" ${getLanguage(state) === "en" ? "selected" : ""}>English</option>
+        </select>
+      </label>
+      <label class="field"><span>${t(state, "settings.graphics", "Graphics Quality")}</span>
         <select id="setting-graphics">
           <option value="low" ${s.graphicsQuality === "low" ? "selected" : ""}>LOW</option>
           <option value="medium" ${s.graphicsQuality === "medium" ? "selected" : ""}>MEDIUM</option>
           <option value="high" ${s.graphicsQuality === "high" ? "selected" : ""}>HIGH</option>
         </select>
       </label>
-      <label class="field"><span>Controls Sensitivity (${Number(s.controlsSensitivity || 1).toFixed(2)})</span>
+      <label class="field"><span>${t(state, "settings.controls", "Controls Sensitivity")} (${Number(s.controlsSensitivity || 1).toFixed(2)})</span>
         <input id="setting-controls" type="range" min="0.6" max="1.8" step="0.05" value="${s.controlsSensitivity || 1}" />
       </label>
-      <label class="field"><span>Camera Sensitivity (${Number(s.cameraSensitivity || 1).toFixed(2)})</span>
+      <label class="field"><span>${t(state, "settings.camera", "Camera Sensitivity")} (${Number(s.cameraSensitivity || 1).toFixed(2)})</span>
         <input id="setting-camera" type="range" min="0.6" max="1.8" step="0.05" value="${s.cameraSensitivity || 1}" />
       </label>
       <div class="actions">
-        <button data-action="toggle-sound">${s.soundEnabled ? "Sound: ON" : "Sound: OFF"}</button>
-        <button data-action="toggle-music">${s.musicEnabled ? "Music: ON" : "Music: OFF"}</button>
-        <button data-action="save-settings">Save Settings</button>
+        <button data-action="toggle-sound">${isRu ? "Звук" : "Sound"}: ${s.soundEnabled ? t(state, "common.on", "ON") : t(state, "common.off", "OFF")}</button>
+        <button data-action="toggle-music">${isRu ? "Музыка" : "Music"}: ${s.musicEnabled ? t(state, "common.on", "ON") : t(state, "common.off", "OFF")}</button>
+        <button data-action="save-settings">${t(state, "settings.save", "Save Settings")}</button>
       </div>
     </section>
   `;
@@ -318,7 +348,7 @@ function renderCity() {
   const worldContainer = document.getElementById("city-world-3d-container");
   const mountFallbackWorld = () => {
     state.meta.disable3dWorld = true;
-    setRuntimeNotice("3D world unavailable in this browser. Use map, quests, inventory, and profile panels.");
+    setRuntimeNotice(t(state, "notices.worldUnavailable", "3D world unavailable in this browser. Use map, quests, inventory, and profile panels."));
     if (worldContainer) {
       worldContainer.innerHTML = `
         <div class="city-world-stage">
@@ -343,6 +373,7 @@ function renderCity() {
       container: worldContainer,
       state,
       settings: state.settings,
+      text: cityWorldText(state),
       onMenuAction: (menuAction) => {
         if (menuAction === "resume") return;
         if (menuAction === "map") navigateTo(state, "districts");
@@ -350,7 +381,7 @@ function renderCity() {
         if (menuAction === "inventory") navigateTo(state, "inventory");
         if (menuAction === "profile") navigateTo(state, "profile");
         if (menuAction === "settings") navigateTo(state, "settings");
-        if (menuAction === "save") setRuntimeNotice("Progress saved.");
+        if (menuAction === "save") setRuntimeNotice(t(state, "notices.saved", "Progress saved."));
         if (menuAction === "main-menu") navigateTo(state, "main-menu");
         persist();
         render();
@@ -811,6 +842,7 @@ function renderQuests() {
 
 function render() {
   try {
+    applyLocalizedShell();
     const gameplayMode = !loading && state.meta.hasCreatedCharacter && state.currentScreen === "city";
     setGameplayMode(gameplayMode);
     root.classList.remove("screen-enter");
@@ -885,7 +917,7 @@ function render() {
     }
     nav.style.display = "none";
     setGameplayMode(false);
-    setRuntimeNotice("A UI error occurred. You can continue by returning to the main menu.");
+    setRuntimeNotice(t(state, "notices.uiError", "A UI error occurred. You can continue by returning to the main menu."));
     renderStatus();
     root.innerHTML = `
       <section class="card marble">
@@ -974,7 +1006,7 @@ root.addEventListener("click", (event) => {
         navigateTo(state, "profile");
         setRuntimeNotice("");
       } else {
-        setRuntimeNotice("Create a character first to view the full profile.");
+        setRuntimeNotice(t(state, "notices.createFirst", "Create a character first to view the full profile."));
       }
       persist();
       render();
@@ -1001,9 +1033,11 @@ root.addEventListener("click", (event) => {
       const controlsSensitivity = Number(document.getElementById("setting-controls")?.value || state.settings.controlsSensitivity || 1);
       const cameraSensitivity = Number(document.getElementById("setting-camera")?.value || state.settings.cameraSensitivity || 1);
       const graphicsQuality = document.getElementById("setting-graphics")?.value || state.settings.graphicsQuality || "medium";
+      const language = document.getElementById("setting-language")?.value || state.settings.language || DEFAULT_LANGUAGE;
       state.settings.controlsSensitivity = Math.max(0.6, Math.min(1.8, controlsSensitivity));
       state.settings.cameraSensitivity = Math.max(0.6, Math.min(1.8, cameraSensitivity));
       state.settings.graphicsQuality = ["low", "medium", "high"].includes(graphicsQuality) ? graphicsQuality : "medium";
+      state.settings.language = ["ru", "en"].includes(language) ? language : DEFAULT_LANGUAGE;
       setRuntimeNotice("");
       persist();
       render();
@@ -1075,7 +1109,7 @@ root.addEventListener("click", (event) => {
     render();
   } catch (error) {
     console.error("Action failed:", action, error);
-    setRuntimeNotice("The last action failed safely. Please try again.");
+    setRuntimeNotice(t(state, "notices.actionFailed", "The last action failed safely. Please try again."));
     render();
   }
 });

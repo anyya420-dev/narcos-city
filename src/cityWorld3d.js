@@ -33,7 +33,19 @@ const ENTERABLE_INTERIORS = {
   "safehouse-compound": "safehouse",
   bank: "bank",
   "luxury-club": "nightclub",
-  "underground-club": "nightclub"
+  "underground-club": "nightclub",
+  restaurant: "restaurant",
+  "high-end-restaurant": "restaurant",
+  hotel: "hotel",
+  "corporate-hotel": "hotel",
+  garage: "garage",
+  "service-garage": "garage",
+  "private-casino": "casino",
+  "office-complex": "office",
+  "legal-office": "office",
+  "business-hub": "office",
+  "small-businesses": "store",
+  "roadside-market": "store"
 };
 
 function createLabelTexture(text, bg = "rgba(15,15,20,0.75)", fg = "#f4e8c8") {
@@ -426,6 +438,26 @@ function populateInteriors(scene, interiorType, markers) {
     createProp(3.8, 0.8, 7.5, 2.6, 1.6, 1.5, 0x686d76); // teller area
   }
 
+  if (interiorType === "restaurant" || interiorType === "hotel") {
+    createProp(0, 0.42, -2.6, 8, 0.84, 2.2, 0x4b3a3d);
+    createProp(-7.2, 0.44, 4.4, 2.2, 0.88, 2.2, 0x5a4641);
+    createProp(7.2, 0.44, 4.4, 2.2, 0.88, 2.2, 0x5a4641);
+    createProp(0, 1.5, 12.8, 6.2, 2.8, 1.2, 0x3a333e);
+  }
+
+  if (interiorType === "garage") {
+    createProp(-8.2, 0.5, -5.4, 4, 1, 5, 0x3e434c);
+    createProp(0.8, 0.65, -5.2, 5.4, 1.3, 4.2, 0x474f59);
+    createProp(8.2, 0.6, 6.4, 4.8, 1.2, 5.6, 0x4d5864);
+  }
+
+  if (interiorType === "casino" || interiorType === "store" || interiorType === "office") {
+    createProp(-8.8, 1.1, -6.8, 5.4, 2.2, 1.2, 0x554b5f);
+    createProp(-8.8, 1.1, 0, 5.4, 2.2, 1.2, 0x554b5f);
+    createProp(7.6, 0.55, 5.8, 4.2, 1.1, 2.2, 0x3f4450);
+    createProp(0, 0.5, -2.4, 5.6, 1, 2.4, 0x514958);
+  }
+
   markers.push({
     id: "interior-exit",
     districtId: null,
@@ -440,7 +472,7 @@ function populateInteriors(scene, interiorType, markers) {
   scene.add(exitMarker);
 }
 
-export function mountCityWorld3d({ container, state, onInteract, onMenuAction, onError, settings = {} }) {
+export function mountCityWorld3d({ container, state, onInteract, onMenuAction, onError, settings = {}, text = {} }) {
   if (!container) return { destroy() {} };
   if (typeof window === "undefined" || !window.WebGLRenderingContext) {
     container.innerHTML = `<section class="card"><h3>3D Unsupported</h3><p class="muted">WebGL is unavailable on this device. Use City/District panels.</p></section>`;
@@ -451,6 +483,14 @@ export function mountCityWorld3d({ container, state, onInteract, onMenuAction, o
   const qualitySettings = QUALITY[settings.graphicsQuality] || QUALITY.medium;
   const interactables = getInteractables(model);
   const spawn = getSpawnPoint(state, model);
+
+  const t = (key, fallback) => text[key] || fallback;
+  const weatherLabelById = {
+    clear: t("weather.clear", "CLEAR"),
+    cloudy: t("weather.cloudy", "CLOUDY"),
+    rain: t("weather.rain", "RAIN"),
+    fog: t("weather.fog", "FOG")
+  };
 
   container.innerHTML = `
     <div class="city-world-stage">
@@ -470,18 +510,20 @@ export function mountCityWorld3d({ container, state, onInteract, onMenuAction, o
           <button class="world-button small" id="zoom-out-button" type="button" aria-label="Zoom out">－</button>
           <button class="world-button small" id="fullscreen-button" type="button" aria-label="Toggle fullscreen">⛶</button>
         </div>
-        <div class="interaction-prompt" id="interaction-prompt">Explore the city...</div>
+        <div class="world-time" id="world-time"></div>
+        <div class="world-weather" id="world-weather"></div>
+        <div class="interaction-prompt" id="interaction-prompt">${t("prompt.explore", "Explore the city...")}</div>
         <div class="pause-menu" id="pause-menu" hidden>
-          <h3>PAUSED</h3>
+          <h3>${t("pause.title", "PAUSED")}</h3>
           <div class="pause-grid">
-            <button data-menu="resume" type="button">Resume</button>
-            <button data-menu="map" type="button">Map</button>
-            <button data-menu="quests" type="button">Quests</button>
-            <button data-menu="inventory" type="button">Inventory</button>
-            <button data-menu="profile" type="button">Profile</button>
-            <button data-menu="settings" type="button">Settings</button>
-            <button data-menu="save" type="button">Save</button>
-            <button data-menu="main-menu" type="button">Exit Menu</button>
+            <button data-menu="resume" type="button">${t("pause.resume", "Resume")}</button>
+            <button data-menu="map" type="button">${t("pause.map", "Map")}</button>
+            <button data-menu="quests" type="button">${t("pause.quests", "Quests")}</button>
+            <button data-menu="inventory" type="button">${t("pause.inventory", "Inventory")}</button>
+            <button data-menu="profile" type="button">${t("pause.profile", "Profile")}</button>
+            <button data-menu="settings" type="button">${t("pause.settings", "Settings")}</button>
+            <button data-menu="save" type="button">${t("pause.save", "Save")}</button>
+            <button data-menu="main-menu" type="button">${t("pause.exit", "Exit Menu")}</button>
           </div>
         </div>
         <div class="city-world-controls" aria-hidden="true">
@@ -489,10 +531,10 @@ export function mountCityWorld3d({ container, state, onInteract, onMenuAction, o
             <div class="stick-base" id="move-stick"><div class="stick-knob" id="move-knob"></div></div>
           </div>
           <div class="right-controls">
-            <div class="look-pad" id="look-pad">CAMERA</div>
-            <button class="world-button run" id="run-button" type="button">RUN</button>
-            <button class="world-button action" id="action-button" type="button">INTERACT</button>
-            <button class="world-button context" id="context-button" type="button">ACTION</button>
+            <div class="look-pad" id="look-pad">${t("hud.camera", "CAMERA")}</div>
+            <button class="world-button run" id="run-button" type="button">${t("hud.run", "RUN")}</button>
+            <button class="world-button action" id="action-button" type="button">${t("hud.interact", "INTERACT")}</button>
+            <button class="world-button context" id="context-button" type="button">${t("hud.action", "ACTION")}</button>
           </div>
         </div>
       </div>
@@ -501,6 +543,8 @@ export function mountCityWorld3d({ container, state, onInteract, onMenuAction, o
 
   const canvasHost = container.querySelector(".city-world-canvas");
   const promptNode = container.querySelector("#interaction-prompt");
+  const worldTimeNode = container.querySelector("#world-time");
+  const worldWeatherNode = container.querySelector("#world-weather");
   const moveStick = container.querySelector("#move-stick");
   const moveKnob = container.querySelector("#move-knob");
   const lookPad = container.querySelector("#look-pad");
@@ -648,20 +692,29 @@ export function mountCityWorld3d({ container, state, onInteract, onMenuAction, o
 
   const updateLighting = () => {
     const phase = getDayPhase(state);
-    const config = {
+    const lightConfig = {
       morning: { bg: 0x28334d, fog: 0x2a3650, hemi: 0.62, sun: 0.9, lamp: 0.1 },
       day: { bg: 0x687893, fog: 0x667890, hemi: 0.75, sun: 1.2, lamp: 0 },
       evening: { bg: 0x31293f, fog: 0x372c44, hemi: 0.5, sun: 0.66, lamp: 0.6 },
       night: { bg: 0x12141d, fog: 0x141826, hemi: 0.35, sun: 0.25, lamp: 1.2 }
     }[phase];
+    const weather = state.weather?.current || "clear";
+    const weatherMix = {
+      clear: { fogMul: 1, hemiMul: 1, sunMul: 1, lampAdd: 0 },
+      cloudy: { fogMul: 1.08, hemiMul: 0.9, sunMul: 0.72, lampAdd: 0.2 },
+      rain: { fogMul: 1.18, hemiMul: 0.85, sunMul: 0.64, lampAdd: 0.36 },
+      fog: { fogMul: 1.28, hemiMul: 0.8, sunMul: 0.58, lampAdd: 0.32 }
+    }[weather] || { fogMul: 1, hemiMul: 1, sunMul: 1, lampAdd: 0 };
 
-    scene.background.setHex(config.bg);
-    scene.fog.color.setHex(config.fog);
-    hemi.intensity = config.hemi;
-    sun.intensity = config.sun;
+    scene.background.setHex(lightConfig.bg);
+    scene.fog.color.setHex(lightConfig.fog);
+    scene.fog.near = 28;
+    scene.fog.far = qualitySettings.drawDistance / weatherMix.fogMul;
+    hemi.intensity = lightConfig.hemi * weatherMix.hemiMul;
+    sun.intensity = lightConfig.sun * weatherMix.sunMul;
     streetLights.forEach(({ bulb, light }) => {
-      bulb.material.emissiveIntensity = 0.22 + config.lamp * 0.9;
-      light.intensity = config.lamp;
+      bulb.material.emissiveIntensity = 0.22 + (lightConfig.lamp + weatherMix.lampAdd) * 0.9;
+      light.intensity = lightConfig.lamp + weatherMix.lampAdd;
     });
   };
 
@@ -907,18 +960,23 @@ export function mountCityWorld3d({ container, state, onInteract, onMenuAction, o
           ];
 
       nearest = findNearestInteraction({ x: player.position.x, z: player.position.z }, dynamicInteractables, INTERACTION_RANGE);
+      const hour = String(state.time?.hour ?? 0).padStart(2, "0");
+      const minute = String(state.time?.minute ?? 0).padStart(2, "0");
+      worldTimeNode.textContent = `${t("hud.time", "TIME")} ${hour}:${minute} · ${t("hud.day", "DAY")} ${state.time?.day || 1}`;
+      worldWeatherNode.textContent = `${t("hud.weather", "WEATHER")} ${weatherLabelById[state.weather?.current] || weatherLabelById.clear} · ${String(state.time?.season || "spring").toUpperCase()}`;
       if (nearest) {
-        const buttonPrompt = interiorType ? "Tap INTERACT" : "[E] or Tap INTERACT";
+        const buttonPrompt = interiorType ? t("prompt.tapInteract", "Tap INTERACT") : t("prompt.keyboardInteract", "[E] or Tap INTERACT");
         promptNode.textContent = `${nearest.prompt} · ${buttonPrompt}`;
-        contextButton.textContent = nearest.interactionType === "door" ? "ENTER" : "ACTION";
+        contextButton.textContent = nearest.interactionType === "door" ? t("hud.enter", "ENTER") : t("hud.action", "ACTION");
       } else {
         const districtName = state.districts.find((d) => d.id === state.selectedDistrictId)?.name || "CITY";
         const locationName = LOCATIONS[state.currentLocationId]?.name || state.currentLocationId;
-        promptNode.textContent = `${districtName} · ${locationName} · Explore and approach highlighted points`;
-        contextButton.textContent = "ACTION";
+        promptNode.textContent = `${districtName} · ${locationName} · ${t("prompt.exploreHint", "Explore and approach highlighted points")}`;
+        contextButton.textContent = t("hud.action", "ACTION");
       }
 
       updateCamera(dt);
+      updateLighting();
       renderer.render(scene, camera);
       requestAnimationFrame(animate);
     } catch (error) {

@@ -27,6 +27,14 @@ export const LEVEL_THRESHOLD = BALANCE.xpBasePerLevel;
 
 const ITEM_BY_ID = Object.fromEntries(ITEMS.map((item) => [item.id, item]));
 const LOCATION_LIST = Object.values(LOCATIONS);
+const DAY_PART_MINUTES = 24 * 60;
+const MONTH_DAYS = 30;
+const WEEK_DAYS = 7;
+const MONTHS_PER_YEAR = 12;
+const START_YEAR = 2026;
+const WEEKDAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const SEASONS = ["spring", "summer", "autumn", "winter"];
+const WEATHER_TYPES = ["clear", "cloudy", "rain", "fog"];
 
 function clone(value) {
   return structuredClone(value);
@@ -427,6 +435,46 @@ function refreshDailyQuests(state) {
   }));
 }
 
+function seasonForMonth(month) {
+  if (month === 12 || month <= 2) return "winter";
+  if (month <= 5) return "spring";
+  if (month <= 8) return "summer";
+  return "autumn";
+}
+
+function syncWorldClock(state) {
+  const turnsPerDay = Math.max(1, state.time.turnsPerDay || 8);
+  const turnIndex = Math.max(0, (state.time.turn || 1) - 1);
+  const minutesPerTurn = DAY_PART_MINUTES / turnsPerDay;
+  const totalMinutes = Math.round(turnIndex * minutesPerTurn);
+  state.time.hour = Math.floor(totalMinutes / 60) % 24;
+  state.time.minute = totalMinutes % 60;
+  state.time.weekDay = ((state.time.day - 1) % WEEK_DAYS) + 1;
+  state.time.week = Math.floor((state.time.day - 1) / WEEK_DAYS) + 1;
+  const dayOfYear = Math.max(1, state.time.day);
+  state.time.month = Math.floor((dayOfYear - 1) / MONTH_DAYS) % MONTHS_PER_YEAR + 1;
+  state.time.monthDay = ((dayOfYear - 1) % MONTH_DAYS) + 1;
+  state.time.year = START_YEAR + Math.floor((dayOfYear - 1) / (MONTH_DAYS * MONTHS_PER_YEAR));
+  state.time.season = seasonForMonth(state.time.month);
+}
+
+function maybeShiftWeather(state) {
+  const chance = state.weather?.current === "clear" ? 0.16 : 0.28;
+  if (seededRandom(state) > chance) return;
+  const seasonBias = state.time?.season;
+  const weighted = WEATHER_TYPES.flatMap((entry) => {
+    if (entry === "rain" && seasonBias === "autumn") return [entry, entry];
+    if (entry === "fog" && seasonBias === "winter") return [entry, entry];
+    if (entry === "clear" && seasonBias === "summer") return [entry, entry];
+    return [entry];
+  });
+  const next = weighted[Math.floor(seededRandom(state) * weighted.length) % weighted.length];
+  state.weather.current = next;
+  state.weather.lastChangeDay = state.time.day;
+  state.weather.lastChangeTurn = state.time.turn;
+  addNotification(state, "Weather", `Weather shifted to ${next}.`, "info");
+}
+
 function nextTurn(state, turns = 1) {
   let remaining = Math.max(1, turns);
   while (remaining > 0) {
@@ -441,6 +489,15 @@ function nextTurn(state, turns = 1) {
       refreshDailyQuests(state);
       addNotification(state, "System", `A new day begins in NARCOS CITY (Day ${state.time.day}).`, "info");
     }
+    syncWorldClock(state);
+    if (!state.weather) {
+      state.weather = {
+        current: "clear",
+        lastChangeDay: state.time.day,
+        lastChangeTurn: state.time.turn
+      };
+    }
+    maybeShiftWeather(state);
     tickPrison(state, 1);
     remaining -= 1;
   }
@@ -658,7 +715,20 @@ export function createInitialState() {
       day: 1,
       turn: 1,
       turnsPerDay: TURNS_PER_DAY,
-      lastLoginDay: epochDay()
+      lastLoginDay: epochDay(),
+      hour: 7,
+      minute: 0,
+      weekDay: 1,
+      week: 1,
+      month: 1,
+      monthDay: 1,
+      year: START_YEAR,
+      season: "winter"
+    },
+    weather: {
+      current: "clear",
+      lastChangeDay: 1,
+      lastChangeTurn: 1
     },
     districts: clone(DISTRICTS),
     inventory,
@@ -774,10 +844,12 @@ export function createInitialState() {
       musicEnabled: true,
       graphicsQuality: "medium",
       controlsSensitivity: 1,
-      cameraSensitivity: 1
+      cameraSensitivity: 1,
+      language: "ru"
     }
   };
 
+  syncWorldClock(state);
   addNotification(state, "System", "Welcome to NARCOS CITY. Create your character to begin.");
   refreshDailyQuests(state);
   refreshQuests(state);
@@ -798,6 +870,7 @@ function migrateState(rawState) {
       factionReputation: { ...base.player.factionReputation, ...(rawState.player?.factionReputation || {}) }
     },
     time: { ...base.time, ...rawState.time },
+    weather: { ...base.weather, ...rawState.weather },
     daily: { ...base.daily, ...rawState.daily },
     prison: { ...base.prison, ...rawState.prison },
     credit: { ...base.credit, ...rawState.credit },
@@ -866,6 +939,7 @@ function migrateState(rawState) {
   merged.player.streetReputation = merged.player.reputation.street;
   merged.player.wantedLevel = clamp(merged.player.wantedLevel || merged.meta.wantedLevel || 0, 0, BALANCE.wanted.maxLevel);
   merged.meta.saveVersion = SAVE_VERSION;
+  merged.settings.language = ["ru", "en"].includes(merged.settings.language) ? merged.settings.language : "ru";
   merged.credit.creditLimit = Math.max(BALANCE.credit.maxCreditByLevel, stateCreditLimitForLevel(merged.player.level));
 
   const nowDay = epochDay();
@@ -878,6 +952,7 @@ function migrateState(rawState) {
     addNotification(merged, "System", `${elapsedDays} in-game day(s) advanced while away.`, "info");
   }
   merged.time.lastLoginDay = nowDay;
+  syncWorldClock(merged);
   applyCreditInterest(merged, elapsedDays);
   refreshDailyQuests(merged);
 

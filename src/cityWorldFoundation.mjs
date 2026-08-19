@@ -8,7 +8,9 @@ const DISTRICT_LAYOUT = {
   "rich-district": { x: -40, z: 28 },
   underground: { x: 0, z: 42 },
   residential: { x: -2, z: -42 },
-  "safehouse-area": { x: 26, z: 46 }
+  "safehouse-area": { x: 26, z: 46 },
+  "business-district": { x: -55, z: -2 },
+  outskirts: { x: 56, z: 52 }
 };
 
 const LOCATION_OFFSETS = [
@@ -80,7 +82,22 @@ export function buildWorldModel(state, districts = DISTRICTS, locations = LOCATI
         prompt: `Enter ${data.name}`,
         interactionType: "door",
         districtName: district.name,
-        enterable: ["safehouse", "bank", "luxury-club", "underground-club", "safehouse-compound"].includes(locationId),
+        enterable: [
+          "safehouse",
+          "bank",
+          "luxury-club",
+          "underground-club",
+          "safehouse-compound",
+          "garage",
+          "restaurant",
+          "hotel",
+          "private-casino",
+          "office-complex",
+          "business-hub",
+          "legal-office",
+          "service-garage",
+          "small-businesses"
+        ].includes(locationId),
         locationType:
           locationId.includes("club") || locationId.includes("venue")
             ? "nightlife"

@@ -297,6 +297,7 @@ select {
   position: relative;
   width: 100%;
   height: min(100dvh, 620px);
+  touch-action: none;
 }
 
 .city-world-canvas,
@@ -337,6 +338,8 @@ select {
 
 .gameplay-mode .city-world-stage {
   height: 100dvh;
+  min-height: 100svh;
+  min-height: 100vh;
 }
 
 .city-gameplay-shell {
@@ -415,6 +418,26 @@ select {
   color: var(--gold);
   padding: 0.45rem 0.55rem;
   font-size: 0.72rem;
+}
+
+.world-time,
+.world-weather {
+  position: absolute;
+  right: 0.6rem;
+  padding: 0.24rem 0.42rem;
+  border-radius: 8px;
+  border: 1px solid rgba(170, 176, 189, 0.24);
+  background: rgba(8, 10, 14, 0.62);
+  color: var(--silver);
+  font-size: 0.62rem;
+}
+
+.world-time {
+  top: calc(env(safe-area-inset-top, 0px) + 3.25rem);
+}
+
+.world-weather {
+  top: calc(env(safe-area-inset-top, 0px) + 4.7rem);
 }
 
 .city-world-controls {
