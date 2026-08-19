@@ -1,120 +1,106 @@
-import test from 'node:test';
-import assert from 'node:assert/strict';
+import test from "node:test";
+import assert from "node:assert/strict";
+
 import {
+  bankDeposit,
+  bankWithdraw,
   createInitialState,
-  travelToDistrict,
+  createPlayer,
+  getCurrentLocation,
+  getNpcsAtLocation,
+  getSelectedDistrict,
+  interactWithNpc,
   moveToLocation,
   performLocationAction,
   safehouseRest,
-  safehouseRecoverEnergy,
-  upgradeSafehouse,
-  coolDistrictHeat,
-  inspectInventory,
-  inspectStorage,
-  returnToCity,
-  getSelectedDistrict,
-  getCurrentLocation
-} from '../src/gameLogic.mjs';
+  travelToDistrict,
+  useInventoryItem
+} from "../src/gameLogic.mjs";
 
-test('initial state contains player and districts', () => {
+test("initial state bootstraps required structures", () => {
   const state = createInitialState();
-  assert.equal(state.player.alias, 'Isabella Voss');
-  assert.equal(state.districts.length, 3);
-  assert.ok(state.currentLocationId);
-  assert.ok(state.notifications.length >= 1);
+  assert.equal(state.player.wallet, 10000);
+  assert.equal(state.player.role, "player");
+  assert.equal(state.districts.length, 6);
+  assert.ok(Array.isArray(state.quests));
+  assert.ok(Array.isArray(state.achievements));
+  assert.equal(state.meta.hasCreatedCharacter, false);
 });
 
-test('travel changes selected district and day', () => {
+test("player creation sets name and unlocks gameplay", () => {
   const state = createInitialState();
-  const initialDay = state.day;
-  travelToDistrict(state, 'iron-docks');
-  assert.equal(state.selectedDistrictId, 'iron-docks');
-  assert.equal(state.currentLocationId, 'night-pier');
-  assert.equal(state.day, initialDay + 1);
+  createPlayer(state, "Valentina");
+  assert.equal(state.player.name, "Valentina");
+  assert.equal(state.meta.hasCreatedCharacter, true);
 });
 
-test('move to location updates active location and day', () => {
+test("travel updates district, location, and time", () => {
   const state = createInitialState();
-  const initialDay = state.day;
-  moveToLocation(state, 'gold-coast', 'obsidian-lounge');
-  assert.equal(state.currentLocationId, 'obsidian-lounge');
-  assert.equal(state.day, initialDay + 1);
+  createPlayer(state, "Rico");
+  const startDay = state.time.day;
+  travelToDistrict(state, "harbor");
+  assert.equal(state.selectedDistrictId, "harbor");
+  assert.equal(getSelectedDistrict(state).locations.includes(state.currentLocationId), true);
+  assert.ok(state.time.day >= startDay);
 });
 
-test('location action consumes energy and grants cash', () => {
+test("location action changes economy and energy", () => {
   const state = createInitialState();
-  const district = getSelectedDistrict(state);
-  const location = district.locations[0];
-  const action = location.actions[0];
-  const startCash = state.player.cash;
-  const startEnergy = state.player.energy;
-
-  performLocationAction(state, district.id, location.id, action.id);
-
-  assert.equal(state.player.cash, startCash + action.cash);
-  assert.equal(state.player.energy, startEnergy - action.energy);
+  createPlayer(state, "Rico");
+  moveToLocation(state, "downtown", "nightclub");
+  const cash = state.player.wallet;
+  const energy = state.player.energy;
+  performLocationAction(state, "downtown", "nightclub", "nightclub-work");
+  assert.ok(state.player.wallet >= cash);
+  assert.ok(state.player.energy < energy);
 });
 
-test('safehouse rest recovers health and energy', () => {
+test("bank deposit and withdraw enforce wallet and bank balance", () => {
   const state = createInitialState();
-  state.player.energy = 30;
-  state.player.health = 40;
+  createPlayer(state, "Rico");
+  const wallet = state.player.wallet;
+  bankDeposit(state, 200);
+  assert.equal(state.player.wallet, wallet - 200);
+  assert.equal(state.player.bankBalance, 200);
 
-  safehouseRest(state);
-
-  assert.ok(state.player.energy > 30);
-  assert.ok(state.player.health > 40);
+  bankWithdraw(state, 200);
+  assert.equal(state.player.wallet, wallet);
+  assert.equal(state.player.bankBalance, 0);
 });
 
-test('safehouse recover energy recovers energy quickly', () => {
+test("safehouse rest recovers resources and advances turn", () => {
   const state = createInitialState();
+  createPlayer(state, "Rico");
   state.player.energy = 20;
-  safehouseRecoverEnergy(state);
+  state.player.health = 25;
+  const previousTurn = state.time.turn;
+  safehouseRest(state);
   assert.ok(state.player.energy > 20);
+  assert.ok(state.player.health > 25);
+  assert.notEqual(state.time.turn, previousTurn);
 });
 
-test('safehouse upgrade costs cash and increases level', () => {
+test("npc interaction updates relationship and quest progress", () => {
   const state = createInitialState();
-  state.player.cash = 2400;
-  const level = state.player.safehouseLevel;
-  const cash = state.player.cash;
-
-  upgradeSafehouse(state);
-
-  assert.equal(state.player.safehouseLevel, 2);
-  assert.equal(state.player.cash, cash - level * 900);
+  createPlayer(state, "Rico");
+  moveToLocation(state, "downtown", "nightclub");
+  const npcs = getNpcsAtLocation(state, getCurrentLocation(state).id);
+  assert.ok(npcs.length > 0);
+  interactWithNpc(state, npcs[0].id, "talk");
+  assert.ok(state.relationships[npcs[0].id].relationshipValue > 0);
+  const connectionsQuest = state.quests.find((quest) => quest.id === "quest-connections");
+  assert.ok(connectionsQuest.progress >= 1);
 });
 
-test('district cooling spends cash and reduces heat', () => {
+test("using consumable item applies effect and decrements quantity", () => {
   const state = createInitialState();
-  const district = getSelectedDistrict(state);
-  district.heat = 40;
-  const startCash = state.player.cash;
-
-  coolDistrictHeat(state, district.id);
-
-  assert.equal(state.player.cash, startCash - 180);
-  assert.equal(district.heat, 24);
-});
-
-test('inventory and storage inspections add notifications', () => {
-  const state = createInitialState();
-  const baseline = state.notifications.length;
-  inspectInventory(state);
-  inspectStorage(state);
-  assert.equal(state.notifications.length, baseline + 2);
-});
-
-test('return to city sets city screen', () => {
-  const state = createInitialState();
-  state.currentScreen = 'safehouse';
-  returnToCity(state);
-  assert.equal(state.currentScreen, 'city');
-});
-
-test('current location helper returns selected location', () => {
-  const state = createInitialState();
-  moveToLocation(state, 'gold-coast', 'obsidian-lounge');
-  const location = getCurrentLocation(state);
-  assert.equal(location.id, 'obsidian-lounge');
+  createPlayer(state, "Rico");
+  state.player.energy = 50;
+  const item = state.inventory.find((entry) => entry.id === "energy-drink");
+  assert.ok(item && item.quantity > 0);
+  const quantityBefore = item.quantity;
+  useInventoryItem(state, "energy-drink");
+  assert.ok(state.player.energy > 50);
+  const updated = state.inventory.find((entry) => entry.id === "energy-drink");
+  assert.equal(updated?.quantity ?? 0, quantityBefore - 1);
 });
