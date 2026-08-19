@@ -87,6 +87,7 @@ const audio = createAudioManager();
 let cityWorldSession = null;
 let loading = true;
 let startedFromMenu = false;
+let runtimeNotice = "";
 
 function persist() {
   try {
@@ -115,6 +116,10 @@ function progressBar(value, max = 100) {
   return `<div class="bar"><span style="width:${pct}%"></span></div>`;
 }
 
+function setRuntimeNotice(message) {
+  runtimeNotice = String(message || "").trim();
+}
+
 function relationshipSnippet() {
   const top = Object.entries(state.relationships)
     .sort((a, b) => b[1].value - a[1].value)
@@ -129,7 +134,10 @@ function relationshipSnippet() {
 
 function renderStatus() {
   if (!state.meta.hasCreatedCharacter) {
-    statusBar.innerHTML = `<p class="muted">Create your character and enter NARCOS CITY.</p>`;
+    statusBar.innerHTML = `
+      <p class="muted">Create your character and enter NARCOS CITY.</p>
+      ${runtimeNotice ? `<p class="badge alert">${escapeHtml(runtimeNotice)}</p>` : ""}
+    `;
     return;
   }
 
@@ -153,6 +161,7 @@ function renderStatus() {
       <div><span>Location</span><strong>${escapeHtml(location.name)}</strong></div>
       <div><span>Day/Turn</span><strong>${state.time.day}/${state.time.turn}</strong></div>
     </div>
+    ${runtimeNotice ? `<p class="badge alert">${escapeHtml(runtimeNotice)}</p>` : ""}
   `;
 }
 
@@ -363,63 +372,85 @@ function renderCity() {
   `;
 
   const worldContainer = document.getElementById("city-world-3d-container");
-  cityWorldSession = mountCityWorld3d({
-    container: worldContainer,
-    state,
-    settings: state.settings,
-    onInteract: (target) => {
-      if (!target) return;
-      if (state.settings?.soundEnabled) audio.interact();
+  try {
+    cityWorldSession = mountCityWorld3d({
+      container: worldContainer,
+      state,
+      settings: state.settings,
+      onInteract: (target) => {
+        if (!target) return;
+        if (state.settings?.soundEnabled) audio.interact();
 
-      if (target.interactionType === "interior-exit") {
-        state.world.currentInteriorId = null;
+        if (target.interactionType === "interior-exit") {
+          state.world.currentInteriorId = null;
+          persist();
+          render();
+          return;
+        }
+
+        if (target.interactionType === "district-marker") {
+          state.world.currentInteriorId = null;
+          travelToDistrict(state, target.id);
+        }
+
+        if (target.interactionType === "door") {
+          if (target.districtId !== state.selectedDistrictId) {
+            travelToDistrict(state, target.districtId);
+          }
+          if ((target.districtId || state.selectedDistrictId) === state.selectedDistrictId) {
+            moveToLocation(state, target.districtId || state.selectedDistrictId, target.id);
+            state.world.currentInteriorId = target.enterable ? target.id : null;
+          }
+        }
+
+        if (target.interactionType === "npc") {
+          state.world.currentInteriorId = null;
+          if (target.districtId !== state.selectedDistrictId) {
+            travelToDistrict(state, target.districtId);
+          }
+          if (
+            (target.districtId || state.selectedDistrictId) === state.selectedDistrictId &&
+            target.locationId &&
+            state.currentLocationId !== target.locationId
+          ) {
+            moveToLocation(state, target.districtId || state.selectedDistrictId, target.locationId);
+          }
+          if ((target.districtId || state.selectedDistrictId) === state.selectedDistrictId) {
+            interactWithNpc(state, target.id, "talk");
+          }
+        }
+
+        if (target.interactionType === "vehicle") {
+          state.world.currentInteriorId = null;
+          const owned = state.vehicles.find((entry) => entry.id === target.id)?.owned;
+          if (owned) {
+            state.player.currentVehicleId = target.id;
+          } else {
+            navigateTo(state, "inventory");
+          }
+        }
+
         persist();
         render();
-        return;
       }
-
-      if (target.interactionType === "district-marker") {
-        state.world.currentInteriorId = null;
-        travelToDistrict(state, target.id);
-      }
-
-      if (target.interactionType === "door") {
-        if (target.districtId !== state.selectedDistrictId) {
-          travelToDistrict(state, target.districtId);
-        }
-        if ((target.districtId || state.selectedDistrictId) === state.selectedDistrictId) {
-          moveToLocation(state, target.districtId || state.selectedDistrictId, target.id);
-          state.world.currentInteriorId = target.enterable ? target.id : null;
-        }
-      }
-
-      if (target.interactionType === "npc") {
-        state.world.currentInteriorId = null;
-        if (target.districtId !== state.selectedDistrictId) {
-          travelToDistrict(state, target.districtId);
-        }
-        if ((target.districtId || state.selectedDistrictId) === state.selectedDistrictId && target.locationId && state.currentLocationId !== target.locationId) {
-          moveToLocation(state, target.districtId || state.selectedDistrictId, target.locationId);
-        }
-        if ((target.districtId || state.selectedDistrictId) === state.selectedDistrictId) {
-          interactWithNpc(state, target.id, "talk");
-        }
-      }
-
-      if (target.interactionType === "vehicle") {
-        state.world.currentInteriorId = null;
-        const owned = state.vehicles.find((entry) => entry.id === target.id)?.owned;
-        if (owned) {
-          state.player.currentVehicleId = target.id;
-        } else {
-          navigateTo(state, "inventory");
-        }
-      }
-
-      persist();
-      render();
+    });
+  } catch (error) {
+    cityWorldSession = null;
+    console.error("Failed to mount 3D city world:", error);
+    setRuntimeNotice("3D world unavailable in this browser. Core city gameplay remains playable from the panels below.");
+    if (worldContainer) {
+      worldContainer.innerHTML = `
+        <div class="city-world-stage">
+          <div class="city-world-overlay">
+            <div class="city-world-heads-up">
+              <p>3D world preview unavailable on this device/browser.</p>
+              <p>Use the city panels to travel, enter locations, interact, and progress.</p>
+            </div>
+          </div>
+        </div>
+      `;
     }
-  });
+  }
 }
 
 function renderDistricts() {
@@ -807,61 +838,83 @@ function renderQuests() {
 }
 
 function render() {
-  root.classList.remove("screen-enter");
-  void root.offsetWidth;
-  root.classList.add("screen-enter");
+  try {
+    root.classList.remove("screen-enter");
+    void root.offsetWidth;
+    root.classList.add("screen-enter");
 
-  if (loading) {
-    nav.style.display = "none";
-    if (cityWorldSession) {
-      cityWorldSession.destroy();
-      cityWorldSession = null;
+    if (loading) {
+      nav.style.display = "none";
+      if (cityWorldSession) {
+        cityWorldSession.destroy();
+        cityWorldSession = null;
+      }
+      renderStatus();
+      renderLoading();
+      return;
     }
-    renderStatus();
-    renderLoading();
-    return;
-  }
 
-  const navVisible = state.meta.hasCreatedCharacter && ["city", "districts", "profile", "inventory", "quests", "settings"].includes(state.currentScreen);
-  nav.style.display = navVisible ? "grid" : "none";
-  nav.querySelectorAll("button").forEach((button) => {
-    button.classList.toggle("active", button.dataset.screen === state.currentScreen);
-    button.disabled = !state.meta.hasCreatedCharacter && button.dataset.screen !== "settings";
-  });
+    const navVisible = state.meta.hasCreatedCharacter && ["city", "districts", "profile", "inventory", "quests", "settings"].includes(state.currentScreen);
+    nav.style.display = navVisible ? "grid" : "none";
+    nav.querySelectorAll("button").forEach((button) => {
+      button.classList.toggle("active", button.dataset.screen === state.currentScreen);
+      button.disabled = !state.meta.hasCreatedCharacter && button.dataset.screen !== "settings";
+    });
 
-  if (!state.meta.hasCreatedCharacter && state.currentScreen !== "settings") {
-    if (cityWorldSession) {
-      cityWorldSession.destroy();
-      cityWorldSession = null;
-    }
-    renderStatus();
-    renderMainMenu();
-    return;
-  }
-
-  renderStatus();
-
-  switch (state.currentScreen) {
-    case "main-menu":
+    if (!state.meta.hasCreatedCharacter && state.currentScreen !== "settings") {
+      if (cityWorldSession) {
+        cityWorldSession.destroy();
+        cityWorldSession = null;
+      }
+      renderStatus();
       renderMainMenu();
-      break;
-    case "settings":
-      renderSettings();
-      break;
-    case "districts":
-      renderDistricts();
-      break;
-    case "profile":
-      renderProfile();
-      break;
-    case "inventory":
-      renderInventory();
-      break;
-    case "quests":
-      renderQuests();
-      break;
-    default:
-      renderCity();
+      return;
+    }
+
+    renderStatus();
+
+    switch (state.currentScreen) {
+      case "main-menu":
+        renderMainMenu();
+        break;
+      case "settings":
+        renderSettings();
+        break;
+      case "districts":
+        renderDistricts();
+        break;
+      case "profile":
+        renderProfile();
+        break;
+      case "inventory":
+        renderInventory();
+        break;
+      case "quests":
+        renderQuests();
+        break;
+      default:
+        renderCity();
+    }
+  } catch (error) {
+    console.error("Render failure:", error);
+    if (cityWorldSession) {
+      cityWorldSession.destroy();
+      cityWorldSession = null;
+    }
+    nav.style.display = "none";
+    setRuntimeNotice("A UI error occurred. You can continue by returning to the main menu.");
+    renderStatus();
+    root.innerHTML = `
+      <section class="card marble">
+        <h2>Temporary UI Error</h2>
+        <p class="muted">The interface recovered safely. Use the actions below to continue playing.</p>
+        <div class="actions">
+          <button data-action="menu-new-game">Return to Main Menu</button>
+          <button data-action="menu-settings">Open Settings</button>
+          <button data-action="reset-game">Reset Save</button>
+        </div>
+      </section>
+    `;
   }
 }
 
@@ -900,125 +953,141 @@ root.addEventListener("click", (event) => {
     prisonActionId,
     questId
   } = button.dataset;
+  try {
+    if (action === "create-player") {
+      const input = document.getElementById("player-name-input");
+      createPlayer(state, input?.value || "");
+      if (state.meta.hasCreatedCharacter) {
+        startedFromMenu = true;
+        navigateTo(state, "city");
+      }
+      setRuntimeNotice("");
+      persist();
+      render();
+      return;
+    }
 
-  if (action === "create-player") {
-    const input = document.getElementById("player-name-input");
-    createPlayer(state, input?.value || "");
-    if (state.meta.hasCreatedCharacter) {
+    if (action === "menu-new-game") {
       startedFromMenu = true;
+      if (state.meta.hasCreatedCharacter) {
+        state = resetGame();
+      }
+      setRuntimeNotice("");
+      navigateTo(state, "main-menu");
+      persist();
+      render();
+      return;
+    }
+    if (action === "menu-continue") {
+      startedFromMenu = true;
+      setRuntimeNotice("");
       navigateTo(state, "city");
+      persist();
+      render();
+      return;
     }
-    persist();
-    render();
-    return;
-  }
-
-  if (action === "menu-new-game") {
-    startedFromMenu = true;
-    if (state.meta.hasCreatedCharacter) {
-      state = resetGame();
+    if (action === "menu-profile") {
+      if (state.meta.hasCreatedCharacter) {
+        navigateTo(state, "profile");
+        setRuntimeNotice("");
+      } else {
+        setRuntimeNotice("Create a character first to view the full profile.");
+      }
+      persist();
+      render();
+      return;
     }
-    navigateTo(state, "main-menu");
-    persist();
-    render();
-    return;
-  }
-  if (action === "menu-continue") {
-    startedFromMenu = true;
-    navigateTo(state, "city");
-    persist();
-    render();
-    return;
-  }
-  if (action === "menu-profile") {
-    if (state.meta.hasCreatedCharacter) navigateTo(state, "profile");
-    persist();
-    render();
-    return;
-  }
-  if (action === "menu-settings") {
-    navigateTo(state, "settings");
-    persist();
-    render();
-    return;
-  }
-
-  if (action === "toggle-sound") state.settings.soundEnabled = !state.settings.soundEnabled;
-  if (action === "toggle-music") state.settings.musicEnabled = !state.settings.musicEnabled;
-  if (action === "save-settings") {
-    const controlsSensitivity = Number(document.getElementById("setting-controls")?.value || state.settings.controlsSensitivity || 1);
-    const cameraSensitivity = Number(document.getElementById("setting-camera")?.value || state.settings.cameraSensitivity || 1);
-    const graphicsQuality = document.getElementById("setting-graphics")?.value || state.settings.graphicsQuality || "medium";
-    state.settings.controlsSensitivity = Math.max(0.6, Math.min(1.8, controlsSensitivity));
-    state.settings.cameraSensitivity = Math.max(0.6, Math.min(1.8, cameraSensitivity));
-    state.settings.graphicsQuality = ["low", "medium", "high"].includes(graphicsQuality) ? graphicsQuality : "medium";
-    persist();
-    render();
-    return;
-  }
-
-  if (!state.meta.hasCreatedCharacter && !["settings", "main-menu"].includes(state.currentScreen)) return;
-
-  if (action === "travel") travelToDistrict(state, districtId);
-  if (action === "enter-location") moveToLocation(state, districtId, locationId);
-  if (action === "location-action") performLocationAction(state, districtId, locationId, actionId);
-  if (action === "safehouse-rest") safehouseRest(state);
-  if (action === "safehouse-energy") safehouseRecoverEnergy(state);
-  if (action === "upgrade-safehouse") upgradeSafehouse(state);
-  if (action === "cool-heat") coolDistrictHeat(state, districtId || state.selectedDistrictId);
-  if (action === "bank-deposit") bankDeposit(state, Number(amount || 200));
-  if (action === "bank-withdraw") bankWithdraw(state, Number(amount || 200));
-  if (action === "use-item") useInventoryItem(state, itemId);
-  if (action === "buy-item") buyMarketItem(state, itemId, Number(price));
-  if (action === "sell-item") sellMarketItem(state, itemId, Number(price));
-  if (action === "buy-vehicle") buyVehicle(state, vehicleId);
-  if (action === "select-vehicle" && vehicleId) state.player.currentVehicleId = vehicleId;
-  if (action === "select-vehicle" && !vehicleId) cycleVehicle(state);
-  if (action === "npc-action") interactWithNpc(state, npcId, npcInteraction);
-  if (action === "business-action") runBusinessAction(state, businessId);
-  if (action === "business-upgrade") runBusinessAction(state, businessId, "upgrade");
-  if (action === "buy-property") buyProperty(state, propertyId);
-  if (action === "faction-action") runFactionAction(state, factionId);
-  if (action === "job-action") runJobAction(state, jobId);
-  if (action === "crime-operation") runCrimeOperation(state, operationId);
-  if (action === "prison-action") performPrisonAction(state, prisonActionId);
-  if (action === "credit-request") requestCredit(state, Number(amount || 500));
-  if (action === "credit-repay") repayCredit(state, Number(amount || 300));
-  if (action === "casino-play") casinoPlay(state, game, 150);
-  if (action === "claim-daily") claimDailyReward(state);
-  if (action === "claim-daily-quest") claimDailyQuestReward(state, questId);
-  if (action === "exit-interior") state.world.currentInteriorId = null;
-  if (action === "event-choice") chooseEventChoice(state, choiceId);
-  if (action === "mark-note") markNotificationRead(state, noteId);
-  if (action === "mark-all-notes") markAllNotificationsRead(state);
-  if (action === "return-city") returnToCity(state);
-
-  if (action === "debug-on") {
-    toggleDebugMode(state, true);
-    localStorage.setItem("narcos-city-debug", "1");
-  }
-  if (action === "debug-off") {
-    toggleDebugMode(state, false);
-    localStorage.removeItem("narcos-city-debug");
-  }
-  if (action === "debug-money") debugAddMoney(state, 5000);
-  if (action === "debug-xp") debugAddXp(state, 240);
-  if (action === "debug-rep") debugChangeReputation(state, "city", 8);
-  if (action === "debug-district") debugUnlockDistrict(state, "underground");
-  if (action === "debug-quest") debugCompleteQuest(state, "story-01");
-  if (action === "debug-item") debugAddItem(state, "medkit", 3);
-  if (action === "debug-vehicle") debugAddVehicle(state, "sedan-classic");
-  if (action === "debug-property") debugAddProperty(state, "apt-oldtown");
-
-  if (action === "reset-game") {
-    if (window.confirm("Reset all progress?")) {
-      state = resetGame();
-      localStorage.removeItem(STORAGE_KEY);
+    if (action === "menu-settings") {
+      navigateTo(state, "settings");
+      setRuntimeNotice("");
+      persist();
+      render();
+      return;
     }
-  }
 
-  persist();
-  render();
+    if (action === "toggle-sound") state.settings.soundEnabled = !state.settings.soundEnabled;
+    if (action === "toggle-music") state.settings.musicEnabled = !state.settings.musicEnabled;
+    if (action === "save-settings") {
+      const controlsSensitivity = Number(document.getElementById("setting-controls")?.value || state.settings.controlsSensitivity || 1);
+      const cameraSensitivity = Number(document.getElementById("setting-camera")?.value || state.settings.cameraSensitivity || 1);
+      const graphicsQuality = document.getElementById("setting-graphics")?.value || state.settings.graphicsQuality || "medium";
+      state.settings.controlsSensitivity = Math.max(0.6, Math.min(1.8, controlsSensitivity));
+      state.settings.cameraSensitivity = Math.max(0.6, Math.min(1.8, cameraSensitivity));
+      state.settings.graphicsQuality = ["low", "medium", "high"].includes(graphicsQuality) ? graphicsQuality : "medium";
+      setRuntimeNotice("");
+      persist();
+      render();
+      return;
+    }
+
+    if (!state.meta.hasCreatedCharacter && !["settings", "main-menu"].includes(state.currentScreen)) return;
+
+    if (action === "travel") travelToDistrict(state, districtId);
+    if (action === "enter-location") moveToLocation(state, districtId, locationId);
+    if (action === "location-action") performLocationAction(state, districtId, locationId, actionId);
+    if (action === "safehouse-rest") safehouseRest(state);
+    if (action === "safehouse-energy") safehouseRecoverEnergy(state);
+    if (action === "upgrade-safehouse") upgradeSafehouse(state);
+    if (action === "cool-heat") coolDistrictHeat(state, districtId || state.selectedDistrictId);
+    if (action === "bank-deposit") bankDeposit(state, Number(amount || 200));
+    if (action === "bank-withdraw") bankWithdraw(state, Number(amount || 200));
+    if (action === "use-item") useInventoryItem(state, itemId);
+    if (action === "buy-item") buyMarketItem(state, itemId, Number(price));
+    if (action === "sell-item") sellMarketItem(state, itemId, Number(price));
+    if (action === "buy-vehicle") buyVehicle(state, vehicleId);
+    if (action === "select-vehicle" && vehicleId) state.player.currentVehicleId = vehicleId;
+    if (action === "select-vehicle" && !vehicleId) cycleVehicle(state);
+    if (action === "npc-action") interactWithNpc(state, npcId, npcInteraction);
+    if (action === "business-action") runBusinessAction(state, businessId);
+    if (action === "business-upgrade") runBusinessAction(state, businessId, "upgrade");
+    if (action === "buy-property") buyProperty(state, propertyId);
+    if (action === "faction-action") runFactionAction(state, factionId);
+    if (action === "job-action") runJobAction(state, jobId);
+    if (action === "crime-operation") runCrimeOperation(state, operationId);
+    if (action === "prison-action") performPrisonAction(state, prisonActionId);
+    if (action === "credit-request") requestCredit(state, Number(amount || 500));
+    if (action === "credit-repay") repayCredit(state, Number(amount || 300));
+    if (action === "casino-play") casinoPlay(state, game, 150);
+    if (action === "claim-daily") claimDailyReward(state);
+    if (action === "claim-daily-quest") claimDailyQuestReward(state, questId);
+    if (action === "exit-interior") state.world.currentInteriorId = null;
+    if (action === "event-choice") chooseEventChoice(state, choiceId);
+    if (action === "mark-note") markNotificationRead(state, noteId);
+    if (action === "mark-all-notes") markAllNotificationsRead(state);
+    if (action === "return-city") returnToCity(state);
+
+    if (action === "debug-on") {
+      toggleDebugMode(state, true);
+      localStorage.setItem("narcos-city-debug", "1");
+    }
+    if (action === "debug-off") {
+      toggleDebugMode(state, false);
+      localStorage.removeItem("narcos-city-debug");
+    }
+    if (action === "debug-money") debugAddMoney(state, 5000);
+    if (action === "debug-xp") debugAddXp(state, 240);
+    if (action === "debug-rep") debugChangeReputation(state, "city", 8);
+    if (action === "debug-district") debugUnlockDistrict(state, "underground");
+    if (action === "debug-quest") debugCompleteQuest(state, "story-01");
+    if (action === "debug-item") debugAddItem(state, "medkit", 3);
+    if (action === "debug-vehicle") debugAddVehicle(state, "sedan-classic");
+    if (action === "debug-property") debugAddProperty(state, "apt-oldtown");
+
+    if (action === "reset-game") {
+      if (window.confirm("Reset all progress?")) {
+        state = resetGame();
+        localStorage.removeItem(STORAGE_KEY);
+      }
+    }
+
+    setRuntimeNotice("");
+    persist();
+    render();
+  } catch (error) {
+    console.error("Action failed:", action, error);
+    setRuntimeNotice("The last action failed safely. Please try again.");
+    render();
+  }
 });
 
 if (localStorage.getItem("narcos-city-debug") === "1") {
