@@ -51,7 +51,8 @@ test("travel requires reputation and works after unlock", () => {
   debugChangeReputation(state, "city", 10);
   travelToDistrict(state, "old-town");
   assert.equal(state.selectedDistrictId, "old-town");
-  assert.ok(state.player.money < startMoney);
+  assert.ok(state.transactions.some((tx) => tx.source === "travel" && tx.amount < 0));
+  assert.notEqual(state.player.money, startMoney);
 });
 
 test("location action and event hooks modify progression", () => {
@@ -82,7 +83,8 @@ test("market buy and use item affects inventory and health/energy", () => {
   state.player.health = 50;
   useInventoryItem(state, "medkit");
   assert.ok(state.player.health > 50);
-  assert.ok(state.player.money < moneyBefore);
+  assert.ok(state.transactions.some((tx) => tx.source === "market" && tx.amount < 0));
+  assert.notEqual(state.player.money, moneyBefore);
 });
 
 test("transport/property/business systems connect to economy", () => {

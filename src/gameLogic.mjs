@@ -559,6 +559,7 @@ export function createInitialState() {
       currentVehicleId: VEHICLES.find((entry) => entry.owned)?.id || VEHICLES[0].id,
       factionReputation: factionRep,
       relationships: [],
+      completedQuests: [],
       ownedProperties: [],
       ownedBusinesses: [],
       inventory: inventory,
@@ -690,6 +691,7 @@ function migrateState(rawState) {
   merged.player.currentDistrict = merged.selectedDistrictId;
   merged.player.currentLocation = merged.currentLocationId;
   merged.player.currentVehicleId = merged.player.currentVehicleId || getCurrentVehicle(merged).id;
+  merged.player.completedQuests = Array.isArray(merged.player.completedQuests) ? merged.player.completedQuests : [];
   merged.player.money = Math.max(0, merged.player.money || merged.player.wallet || 0);
   merged.player.bankBalance = Math.max(0, merged.player.bankBalance || 0);
   merged.player.reputation.street = merged.player.reputation.street || merged.player.streetReputation || 0;
