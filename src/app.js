@@ -261,17 +261,21 @@ function renderCity() {
         if (target.districtId !== state.selectedDistrictId) {
           travelToDistrict(state, target.districtId);
         }
-        moveToLocation(state, target.districtId || state.selectedDistrictId, target.id);
+        if ((target.districtId || state.selectedDistrictId) === state.selectedDistrictId) {
+          moveToLocation(state, target.districtId || state.selectedDistrictId, target.id);
+        }
       }
 
       if (target.interactionType === "npc") {
         if (target.districtId !== state.selectedDistrictId) {
           travelToDistrict(state, target.districtId);
         }
-        if (target.locationId && state.currentLocationId !== target.locationId) {
+        if ((target.districtId || state.selectedDistrictId) === state.selectedDistrictId && target.locationId && state.currentLocationId !== target.locationId) {
           moveToLocation(state, target.districtId || state.selectedDistrictId, target.locationId);
         }
-        interactWithNpc(state, target.id, "talk");
+        if ((target.districtId || state.selectedDistrictId) === state.selectedDistrictId) {
+          interactWithNpc(state, target.id, "talk");
+        }
       }
 
       if (target.interactionType === "vehicle") {
