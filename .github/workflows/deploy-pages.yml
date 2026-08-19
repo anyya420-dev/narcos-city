@@ -1,4 +1,4 @@
-name: Deploy static app to GitHub Pages
+name: Validate GitHub Pages branch deployment
 
 on:
   push:
@@ -9,44 +9,37 @@ on:
       - index.html
       - styles.css
       - src/**
+      - tests/**
+      - package.json
       - .github/workflows/deploy-pages.yml
       - .nojekyll
   workflow_dispatch:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
-
-concurrency:
-  group: pages
-  cancel-in-progress: false
 
 jobs:
-  deploy:
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+  validate-pages-site:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Pages
-        uses: actions/configure-pages@v5
+      - name: Run tests
+        run: npm test
 
-      - name: Prepare static site artifact
+      - name: Smoke check branch-based Pages path
         run: |
-          rm -rf _site
-          mkdir -p _site/src
-          cp index.html styles.css .nojekyll _site/
-          cp -R src/* _site/src/
+          set -euo pipefail
+          rm -rf /tmp/pages-root
+          mkdir -p /tmp/pages-root/narcos-city
+          cp -R index.html styles.css src .nojekyll /tmp/pages-root/narcos-city/
 
-      - name: Upload static artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: _site
+          python3 -m http.server 4173 --directory /tmp/pages-root >/tmp/pages-http.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid"' EXIT
+          sleep 1
 
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+          curl -fsS http://127.0.0.1:4173/narcos-city/ | grep -q 'NARCOS CITY'
+          curl -fsS http://127.0.0.1:4173/narcos-city/styles.css >/dev/null
+          curl -fsS http://127.0.0.1:4173/narcos-city/src/app.js >/dev/null
