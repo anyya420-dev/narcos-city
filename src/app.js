@@ -9,6 +9,7 @@ import {
   chooseEventChoice,
   claimDailyReward,
   claimDailyQuestReward,
+  changeOutfit,
   coolDistrictHeat,
   createInitialState,
   createPlayer,
@@ -37,8 +38,11 @@ import {
   navigateTo,
   normalizeState,
   performLocationAction,
+  performLifeActivity,
   performPrisonAction,
+  payRent,
   repayCredit,
+  rentProperty,
   requestCredit,
   resetGame,
   returnToCity,
@@ -49,6 +53,9 @@ import {
   safehouseRecoverEnergy,
   safehouseRest,
   sellMarketItem,
+  startDateWithNpc,
+  hostSocialEvent,
+  proposeToNpc,
   toggleDebugMode,
   travelToDistrict,
   upgradeSafehouse,
@@ -59,13 +66,17 @@ import { createDistrictAnchors } from "./cityWorldFoundation.mjs";
 import { createAudioManager } from "./audioManager.mjs";
 import { cityWorldText, DEFAULT_LANGUAGE, getLanguage, t } from "./i18n.mjs";
 
-const STORAGE_KEY = "narcos-city-state-v6";
+const STORAGE_KEY = "narcos-city-state-v7";
 const APP_SETTINGS_KEY = "narcos-city-settings-v1";
 const LOADING_MS = 900;
 
 function loadState() {
   try {
-    const saved = localStorage.getItem(STORAGE_KEY) || localStorage.getItem("narcos-city-state-v5") || localStorage.getItem("narcos-city-state-v4");
+    const saved =
+      localStorage.getItem(STORAGE_KEY) ||
+      localStorage.getItem("narcos-city-state-v6") ||
+      localStorage.getItem("narcos-city-state-v5") ||
+      localStorage.getItem("narcos-city-state-v4");
     return saved ? normalizeState(JSON.parse(saved)) : createInitialState();
   } catch {
     return createInitialState();
@@ -178,6 +189,7 @@ function renderStatus() {
       <div><span>XP</span><strong>${state.player.xp}/${state.player.nextLevelXp}</strong></div>
       <div><span>Cash / Bank</span><strong>${currency(state.player.money)} / ${currency(state.player.bankBalance)}</strong></div>
       <div><span>Energy</span><strong>${state.player.energy}</strong></div>
+      <div><span>Hunger / Hygiene / Mood</span><strong>${Math.round(state.player.hunger || 0)} / ${Math.round(state.player.hygiene || 0)} / ${Math.round(state.player.mood || 0)}</strong></div>
       <div><span>Health</span><strong>${state.player.health}</strong></div>
       <div><span>Respect / Influence</span><strong>${state.player.respect || 0} / ${state.player.influence}</strong></div>
       <div><span>Status</span><strong>${escapeHtml(state.player.status || "Active")}</strong></div>
@@ -185,7 +197,8 @@ function renderStatus() {
       <div><span>Rep Total</span><strong>${totalRep}</strong></div>
       <div><span>District</span><strong>${escapeHtml(district.name)}</strong></div>
       <div><span>Location</span><strong>${escapeHtml(location.name)}</strong></div>
-      <div><span>Day/Turn</span><strong>${state.time.day}/${state.time.turn}</strong></div>
+      <div><span>Date / Time</span><strong>Y${state.time.year} M${state.time.month} D${state.time.monthDay} · ${String(state.time.hour).padStart(2, "0")}:${String(state.time.minute).padStart(2, "0")}</strong></div>
+      <div><span>Lifestyle / Status</span><strong>${escapeHtml(state.life?.lifestyle || "Comfortable")} / ${escapeHtml(state.life?.socialStatus || "Unknown")}</strong></div>
     </div>
     ${runtimeNotice ? `<p class="badge alert">${escapeHtml(runtimeNotice)}</p>` : ""}
   `;
@@ -501,6 +514,7 @@ function renderProfile() {
   }
   const rep = state.player.reputation;
   const titleIndex = TITLE_RANKS.findIndex((rank) => rank.name === state.player.title);
+  const life = state.life || {};
 
   root.innerHTML = `
     <section class="card marble">
@@ -511,10 +525,26 @@ function renderProfile() {
         <div class="stat">Influence<strong>${state.player.influence}</strong>${progressBar(state.player.influence, 100)}</div>
         <div class="stat">Health<strong>${state.player.health}</strong>${progressBar(state.player.health)}</div>
         <div class="stat">Energy<strong>${state.player.energy}</strong>${progressBar(state.player.energy)}</div>
+        <div class="stat">Hunger<strong>${Math.round(state.player.hunger || 0)}</strong>${progressBar(state.player.hunger || 0)}</div>
+        <div class="stat">Hygiene<strong>${Math.round(state.player.hygiene || 0)}</strong>${progressBar(state.player.hygiene || 0)}</div>
+        <div class="stat">Mood<strong>${Math.round(state.player.mood || 0)}</strong>${progressBar(state.player.mood || 0)}</div>
         <div class="stat">Strength<strong>${state.player.strength}</strong></div>
         <div class="stat">Intelligence<strong>${state.player.intelligence}</strong></div>
         <div class="stat">Charisma<strong>${state.player.charisma}</strong></div>
         <div class="stat">Wanted<strong>${state.player.wantedLevel}/5</strong>${progressBar(state.player.wantedLevel, 5)}</div>
+      </div>
+    </section>
+    <section class="card">
+      <h3>Life Core</h3>
+      <div class="grid-2">
+        <div class="stat">Age<strong>${life.age || 0}</strong></div>
+        <div class="stat">Birthday<strong>${life.birthday ? `${life.birthday.day}/${life.birthday.month}` : "—"}</strong></div>
+        <div class="stat">Occupation<strong>${escapeHtml(life.occupation || "Unemployed")}</strong></div>
+        <div class="stat">Career<strong>${escapeHtml(life.career?.level || "Entry")} · XP ${life.career?.xp || 0}</strong></div>
+        <div class="stat">Education<strong>${escapeHtml(life.education?.level || "School")} · ${life.education?.points || 0} pts</strong></div>
+        <div class="stat">Residence<strong>${escapeHtml(life.residence?.type || "None")} (${escapeHtml(life.residence?.ownership || "None")})</strong></div>
+        <div class="stat">Relationship<strong>${escapeHtml(life.relationshipStatus || "Single")}</strong></div>
+        <div class="stat">Lifestyle / Social<strong>${escapeHtml(life.lifestyle || "Comfortable")} / ${escapeHtml(life.socialStatus || "Unknown")}</strong></div>
       </div>
     </section>
     <section class="card">
@@ -607,8 +637,10 @@ function renderInventory() {
         <h4>${escapeHtml(property.name)}</h4>
         <p class="muted">${escapeHtml(property.type)} · ${escapeHtml(property.district)} · ${property.owned ? "Owned" : currency(property.price)}</p>
         <p class="muted">Comfort ${property.comfort} · Security ${property.security} · Storage ${property.storage} · Prestige ${property.prestige}</p>
+        <p class="muted">Rent Weekly ${currency(property.rentWeekly || 0)} · Rent Monthly ${currency(property.rentMonthly || 0)}</p>
         <div class="actions">
           ${property.owned ? "" : `<button data-action="buy-property" data-property-id="${property.id}">Buy</button>`}
+          ${property.owned ? "" : `<button data-action="rent-property" data-property-id="${property.id}" data-rent-mode="weekly">Rent Weekly</button>`}
         </div>
       </article>
     `
@@ -622,8 +654,30 @@ function renderInventory() {
       <div class="actions">
         <button data-action="bank-deposit" data-amount="200">Deposit $200</button>
         <button data-action="bank-withdraw" data-amount="200">Withdraw $200</button>
+        <button data-action="pay-rent">Pay Rent</button>
         <button data-action="select-vehicle">Cycle Vehicle</button>
       </div>
+    </section>
+    <section class="card">
+      <h3>Daily Life</h3>
+      <div class="actions">
+        <button data-action="life-activity" data-life-activity="eat">Eat</button>
+        <button data-action="life-activity" data-life-activity="sleep">Sleep</button>
+        <button data-action="life-activity" data-life-activity="rest">Rest</button>
+        <button data-action="life-activity" data-life-activity="shower">Shower</button>
+        <button data-action="life-activity" data-life-activity="study">Study</button>
+        <button data-action="life-activity" data-life-activity="exercise">Exercise</button>
+      </div>
+      <div class="actions">
+        <button data-action="outfit" data-outfit-preset="Casual">Casual</button>
+        <button data-action="outfit" data-outfit-preset="Elegant">Elegant</button>
+        <button data-action="outfit" data-outfit-preset="Luxury">Luxury</button>
+        <button data-action="outfit" data-outfit-preset="Street">Street</button>
+        <button data-action="outfit" data-outfit-preset="Business">Business</button>
+        <button data-action="outfit" data-outfit-preset="Nightlife">Nightlife</button>
+        <button data-action="outfit" data-outfit-preset="Sport">Sport</button>
+      </div>
+      <p class="muted">Current outfit: ${escapeHtml(state.life?.wardrobe?.currentPreset || "Casual")} · Residence: ${escapeHtml(state.life?.residence?.type || "None")} (${escapeHtml(state.life?.residence?.ownership || "None")})</p>
     </section>
     <section class="card"><h3>Inventory</h3>${inventoryCards || '<p class="muted">Inventory empty.</p>'}</section>
     <section class="card"><h3>Market</h3>${marketCards}</section>
@@ -800,6 +854,31 @@ function renderQuests() {
     </section>
   `;
 
+  const socialCandidates = state.npcs
+    .slice(0, 6)
+    .map((npc) => {
+      const rel = state.relationships[npc.id] || { value: 0, status: "Stranger", romance: 0 };
+      return `<article class="card">
+        <h4>${escapeHtml(npc.name)}</h4>
+        <p class="muted">${escapeHtml(npc.role)} · ${rel.value} (${escapeHtml(rel.status)}) · Romance ${rel.romance || 0}</p>
+        <div class="actions">
+          <button data-action="npc-action" data-npc-id="${npc.id}" data-npc-interaction="chat">Chat</button>
+          <button data-action="npc-action" data-npc-id="${npc.id}" data-npc-interaction="hang-out">Hang Out</button>
+          <button data-action="npc-action" data-npc-id="${npc.id}" data-npc-interaction="flirt">Flirt</button>
+          <button data-action="date-npc" data-npc-id="${npc.id}" data-location-id="restaurant">Date</button>
+          <button data-action="propose-npc" data-npc-id="${npc.id}">Propose</button>
+        </div>
+      </article>`;
+    })
+    .join("");
+
+  const lifeCalendar = (state.life?.calendar?.events || [])
+    .slice(0, 8)
+    .map((entry) => `<p class="muted">• [D${entry.day}] ${escapeHtml(entry.type)} — ${escapeHtml(entry.title)}</p>`)
+    .join("");
+
+  const financeSummary = state.life?.finance || {};
+
   const debugActive = state.meta.debugMode;
   const debugPanel = debugActive
     ? `<section class="card"><h3>Debug Mode</h3><div class="actions">
@@ -827,6 +906,29 @@ function renderQuests() {
     ${prisonPanel}
     ${creditPanel}
     ${foundationPanel}
+    <section class="card">
+      <h3>Social Life</h3>
+      <div class="actions">
+        <button data-action="social-event" data-event-type="dinner">Dinner</button>
+        <button data-action="social-event" data-event-type="party">Party</button>
+        <button data-action="social-event" data-event-type="club-night">Club Night</button>
+        <button data-action="social-event" data-event-type="engagement">Engagement Event</button>
+        <button data-action="social-event" data-event-type="wedding">Wedding</button>
+      </div>
+      ${socialCandidates || '<p class="muted">No social contacts available.</p>'}
+    </section>
+    <section class="card">
+      <h3>Finance Summary</h3>
+      <div class="grid-2">
+        <div class="stat">Weekly Income<strong>${currency(financeSummary.weeklyIncome || 0)}</strong></div>
+        <div class="stat">Weekly Expenses<strong>${currency(financeSummary.weeklyExpenses || 0)}</strong></div>
+        <div class="stat">Monthly Income<strong>${currency(financeSummary.monthlyIncome || 0)}</strong></div>
+        <div class="stat">Monthly Expenses<strong>${currency(financeSummary.monthlyExpenses || 0)}</strong></div>
+        <div class="stat">Housing Costs<strong>${currency(financeSummary.housingCosts || 0)}</strong></div>
+        <div class="stat">Avg Spend<strong>${currency(financeSummary.averageSpending || 0)}</strong></div>
+      </div>
+    </section>
+    <section class="card"><h3>Calendar</h3>${lifeCalendar || '<p class="muted">No planned events yet.</p>'}</section>
     <section class="card"><h3>Daily Quests</h3>${dailyQuests || '<p class="muted">No daily quests.</p>'}</section>
     <section class="card"><h3>Quests</h3>${quests}</section>
     <section class="card"><h3>Achievements</h3>${achievements}</section>
@@ -966,7 +1068,11 @@ root.addEventListener("click", (event) => {
     jobId,
     operationId,
     prisonActionId,
-    questId
+    questId,
+    rentMode,
+    lifeActivity,
+    outfitPreset,
+    eventType
   } = button.dataset;
   try {
     if (action === "create-player") {
@@ -1065,8 +1171,15 @@ root.addEventListener("click", (event) => {
     if (action === "business-action") runBusinessAction(state, businessId);
     if (action === "business-upgrade") runBusinessAction(state, businessId, "upgrade");
     if (action === "buy-property") buyProperty(state, propertyId);
+    if (action === "rent-property") rentProperty(state, propertyId, rentMode || "weekly");
+    if (action === "pay-rent") payRent(state);
+    if (action === "life-activity") performLifeActivity(state, lifeActivity);
+    if (action === "outfit") changeOutfit(state, outfitPreset);
     if (action === "faction-action") runFactionAction(state, factionId);
     if (action === "job-action") runJobAction(state, jobId);
+    if (action === "date-npc") startDateWithNpc(state, npcId, locationId || "restaurant");
+    if (action === "propose-npc") proposeToNpc(state, npcId);
+    if (action === "social-event") hostSocialEvent(state, eventType || "party");
     if (action === "crime-operation") runCrimeOperation(state, operationId);
     if (action === "prison-action") performPrisonAction(state, prisonActionId);
     if (action === "credit-request") requestCredit(state, Number(amount || 500));

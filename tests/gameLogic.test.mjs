@@ -7,6 +7,7 @@ import {
   buyProperty,
   buyVehicle,
   casinoPlay,
+  changeOutfit,
   claimDailyReward,
   claimDailyQuestReward,
   coolDistrictHeat,
@@ -21,18 +22,24 @@ import {
   performPrisonAction,
   repayCredit,
   requestCredit,
+  rentProperty,
   runBusinessAction,
   runCrimeOperation,
   runFactionAction,
   runJobAction,
+  startDateWithNpc,
+  hostSocialEvent,
+  proposeToNpc,
   safehouseRest,
+  performLifeActivity,
+  payRent,
   travelToDistrict,
   useInventoryItem
 } from "../src/gameLogic.mjs";
 
 test("initial state has stage2 structures", () => {
   const state = createInitialState();
-  assert.equal(state.meta.saveVersion, 6);
+  assert.equal(state.meta.saveVersion, 7);
   assert.ok(state.districts.length >= 10);
   assert.ok(state.marketCatalog.length >= 10);
   assert.equal(state.player.wantedLevel, 0);
@@ -45,6 +52,10 @@ test("initial state has stage2 structures", () => {
   assert.ok(Array.isArray(state.jobs));
   assert.ok(Array.isArray(state.crimeOperations));
   assert.ok(Array.isArray(state.daily.quests));
+  assert.ok(state.life);
+  assert.equal(typeof state.life.age, "number");
+  assert.equal(typeof state.player.hunger, "number");
+  assert.equal(state.settings.language, "ru");
 });
 
 test("character creation unlocks gameplay", () => {
@@ -141,7 +152,8 @@ test("normalize migrates old saves and keeps safe defaults", () => {
   const migrated = normalizeState({ player: { name: "Old", money: 200 }, time: { day: 3, turn: 2 }, inventory: [{ id: "medkit", quantity: 1 }] });
   assert.equal(migrated.player.name, "Old");
   assert.equal(typeof migrated.inventory, "object");
-  assert.ok(migrated.meta.saveVersion === 6);
+  assert.ok(migrated.meta.saveVersion === 7);
+  assert.ok(migrated.life?.needs);
 });
 
 test("safehouse rest restores resources and advances time", () => {
@@ -192,4 +204,46 @@ test("daily quest rewards can be claimed once completed", () => {
   interactWithNpc(state, "npc-bartender-1", "talk");
   claimDailyQuestReward(state, dailyQuest.id);
   assert.equal(dailyQuest.claimed, true);
+});
+
+test("life activities change needs and time", () => {
+  const state = createInitialState();
+  createPlayer(state, "Rico");
+  const hungerBefore = state.player.hunger;
+  const turnBefore = state.time.turn;
+  performLifeActivity(state, "eat");
+  assert.ok(state.player.hunger >= hungerBefore);
+  assert.notEqual(state.time.turn, turnBefore);
+});
+
+test("renting and rent payment affect residence and finance", () => {
+  const state = createInitialState();
+  createPlayer(state, "Rico");
+  state.player.money = 10000;
+  rentProperty(state, "apt-oldtown", "weekly");
+  assert.equal(state.life.residence.ownership, "Rented");
+  const dueBefore = state.life.residence.rentDueDay;
+  payRent(state);
+  assert.ok(state.life.residence.rentDueDay > dueBefore);
+});
+
+test("wardrobe, dating, proposal, and wedding flows update relationship state", () => {
+  const state = createInitialState();
+  createPlayer(state, "Rico");
+  state.player.money = 100000;
+  changeOutfit(state, "Elegant");
+  assert.equal(state.life.wardrobe.currentPreset, "Elegant");
+
+  const npcId = "npc-restaurant-owner-1";
+  for (let i = 0; i < 8; i += 1) {
+    interactWithNpc(state, npcId, "flirt", true);
+  }
+  startDateWithNpc(state, npcId, "restaurant");
+  const relation = state.relationships[npcId];
+  relation.romance = 90;
+  relation.trust = 80;
+  relation.value = 92;
+  proposeToNpc(state, npcId);
+  hostSocialEvent(state, "wedding");
+  assert.equal(state.life.relationshipStatus, "Married");
 });

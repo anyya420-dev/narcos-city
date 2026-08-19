@@ -1,5 +1,5 @@
-export const SAVE_VERSION = 6;
-export const TURNS_PER_DAY = 8;
+export const SAVE_VERSION = 7;
+export const TURNS_PER_DAY = 24;
 
 export const BALANCE = {
   xpBasePerLevel: 120,
@@ -721,7 +721,10 @@ export const ITEMS = [
   { id: "tool-kit", name: "Tool Kit", description: "Unlocks mechanic and factory options.", price: 300, category: "Tools", usable: false, effect: { unlockTag: "tools" } },
   { id: "encrypted-ledger", name: "Encrypted Ledger", description: "Critical operational data.", price: 560, category: "Tools", usable: false, effect: { unlockTag: "intel" } },
   { id: "metro-pass", name: "Metro Pass", description: "Reduced local travel costs.", price: 190, category: "Miscellaneous", usable: true, effect: { travelDiscount: 10 } },
-  { id: "gift-box", name: "Gift Box", description: "Improves relationships when given.", price: 210, category: "Miscellaneous", usable: true, effect: { relationship: 6 } }
+  { id: "gift-box", name: "Gift Box", description: "Improves relationships when given.", price: 210, category: "Miscellaneous", usable: true, effect: { relationship: 6 } },
+  { id: "flowers-bouquet", name: "Flower Bouquet", description: "Romantic and friendly gift.", price: 140, category: "Flowers", usable: true, effect: { relationship: 8, mood: 3 } },
+  { id: "jewelry-set", name: "Jewelry Set", description: "Prestige relationship gift.", price: 980, category: "Jewelry", usable: true, effect: { relationship: 14, charisma: 1, cityReputation: 1 } },
+  { id: "collector-watch", name: "Collector Watch", description: "Special collectible gift.", price: 1200, category: "Collectibles", usable: true, effect: { relationship: 12, influence: 1 } }
 ];
 
 export const STARTER_INVENTORY = [
@@ -739,11 +742,118 @@ export const VEHICLES = [
 ];
 
 export const PROPERTIES = [
-  { id: "apt-oldtown", name: "Apartment", type: "Apartment", price: 4500, district: "old-town", comfort: 2, security: 2, storage: 2, prestige: 1, owned: false },
-  { id: "safehouse-harbor", name: "Safehouse", type: "Safehouse", price: 8200, district: "harbor", comfort: 3, security: 4, storage: 3, prestige: 2, owned: false },
-  { id: "lux-apt-rich", name: "Luxury Apartment", type: "Luxury Apartment", price: 16000, district: "rich-district", comfort: 4, security: 4, storage: 4, prestige: 4, owned: false },
-  { id: "mansion-rich", name: "Mansion", type: "Mansion", price: 36000, district: "rich-district", comfort: 5, security: 5, storage: 5, prestige: 5, owned: false },
-  { id: "commercial-core", name: "Commercial Property", type: "Commercial Property", price: 22000, district: "downtown", comfort: 2, security: 3, storage: 4, prestige: 3, owned: false }
+  {
+    id: "apt-small-residential",
+    name: "Small Apartment",
+    type: "Small Apartment",
+    price: 2800,
+    district: "residential",
+    comfort: 2,
+    security: 1,
+    storage: 1,
+    prestige: 1,
+    interior: "small-apartment",
+    rentWeekly: 320,
+    rentMonthly: 1200,
+    owned: false,
+    rented: false
+  },
+  {
+    id: "apt-oldtown",
+    name: "Apartment",
+    type: "Apartment",
+    price: 4500,
+    district: "old-town",
+    comfort: 2,
+    security: 2,
+    storage: 2,
+    prestige: 1,
+    interior: "apartment",
+    rentWeekly: 420,
+    rentMonthly: 1500,
+    owned: false,
+    rented: false
+  },
+  {
+    id: "safehouse-harbor",
+    name: "Safehouse",
+    type: "Apartment",
+    price: 8200,
+    district: "harbor",
+    comfort: 3,
+    security: 4,
+    storage: 3,
+    prestige: 2,
+    interior: "safehouse",
+    rentWeekly: 620,
+    rentMonthly: 2300,
+    owned: false,
+    rented: false
+  },
+  {
+    id: "lux-apt-rich",
+    name: "Luxury Apartment",
+    type: "Luxury Apartment",
+    price: 16000,
+    district: "rich-district",
+    comfort: 4,
+    security: 4,
+    storage: 4,
+    prestige: 4,
+    interior: "luxury-apartment",
+    rentWeekly: 1200,
+    rentMonthly: 4500,
+    owned: false,
+    rented: false
+  },
+  {
+    id: "penthouse-downtown",
+    name: "Penthouse",
+    type: "Penthouse",
+    price: 28000,
+    district: "downtown",
+    comfort: 5,
+    security: 4,
+    storage: 4,
+    prestige: 5,
+    interior: "penthouse",
+    rentWeekly: 1900,
+    rentMonthly: 7200,
+    owned: false,
+    rented: false
+  },
+  {
+    id: "mansion-rich",
+    name: "Mansion",
+    type: "Mansion",
+    price: 36000,
+    district: "rich-district",
+    comfort: 5,
+    security: 5,
+    storage: 5,
+    prestige: 5,
+    interior: "mansion",
+    rentWeekly: 2600,
+    rentMonthly: 9800,
+    owned: false,
+    rented: false
+  },
+  {
+    id: "commercial-core",
+    name: "Commercial Property",
+    type: "Commercial Property",
+    price: 22000,
+    district: "downtown",
+    comfort: 2,
+    security: 3,
+    storage: 4,
+    prestige: 3,
+    interior: "commercial",
+    rentWeekly: 1400,
+    rentMonthly: 5200,
+    owned: false,
+    rented: false
+  }
 ];
 
 export const BUSINESSES = [
@@ -1120,9 +1230,10 @@ export const RELATIONSHIP_STATUSES = [
   { id: "stranger", min: -40, max: 4, label: "Stranger" },
   { id: "acquaintance", min: 5, max: 19, label: "Acquaintance" },
   { id: "friend", min: 20, max: 44, label: "Friend" },
-  { id: "trusted", min: 45, max: 64, label: "Trusted" },
-  { id: "close", min: 65, max: 84, label: "Close" },
-  { id: "partner", min: 85, max: 100, label: "Partner" }
+  { id: "close-friend", min: 45, max: 59, label: "Close Friend" },
+  { id: "romantic-interest", min: 60, max: 74, label: "Romantic Interest" },
+  { id: "partner", min: 75, max: 89, label: "Partner" },
+  { id: "spouse", min: 90, max: 100, label: "Spouse" }
 ];
 
 export const QUESTS = [
@@ -1516,13 +1627,28 @@ export const ACHIEVEMENTS = [
 ];
 
 export const JOBS = [
-  { id: "job-restaurant", name: "Restaurant Worker", minLevel: 1, energyCost: 8, timeCost: 1, income: 220, xp: 14, reputation: { city: 1 } },
-  { id: "job-driver", name: "Driver", minLevel: 2, energyCost: 10, timeCost: 1, income: 280, xp: 16, reputation: { street: 1 } },
-  { id: "job-mechanic", name: "Mechanic", minLevel: 3, energyCost: 11, timeCost: 1, income: 340, xp: 18, reputation: { business: 1 } },
-  { id: "job-security", name: "Security", minLevel: 4, energyCost: 12, timeCost: 1, income: 410, xp: 20, reputation: { city: 1, faction: 1 } },
-  { id: "job-bartender", name: "Bartender", minLevel: 2, energyCost: 9, timeCost: 1, income: 260, xp: 15, reputation: { city: 1 } },
-  { id: "job-office", name: "Office Worker", minLevel: 5, energyCost: 13, timeCost: 1, income: 500, xp: 24, reputation: { business: 2 } },
-  { id: "job-hotel", name: "Hotel Worker", minLevel: 3, energyCost: 10, timeCost: 1, income: 320, xp: 17, reputation: { city: 1, business: 1 } }
+  {
+    id: "job-restaurant",
+    name: "Restaurant Worker",
+    minLevel: 1,
+    energyCost: 10,
+    timeCost: 4,
+    durationMinutes: 360,
+    income: 280,
+    xp: 14,
+    careerXp: 16,
+    schedule: { startHour: 9, endHour: 17 },
+    reputation: { city: 1 }
+  },
+  { id: "job-bartender", name: "Bartender", minLevel: 2, energyCost: 11, timeCost: 4, durationMinutes: 360, income: 340, xp: 16, careerXp: 18, schedule: { startHour: 16, endHour: 23 }, reputation: { city: 1 } },
+  { id: "job-driver", name: "Driver", minLevel: 2, energyCost: 11, timeCost: 4, durationMinutes: 300, income: 360, xp: 16, careerXp: 18, schedule: { startHour: 8, endHour: 16 }, reputation: { street: 1 } },
+  { id: "job-mechanic", name: "Mechanic", minLevel: 3, energyCost: 12, timeCost: 4, durationMinutes: 360, income: 420, xp: 18, careerXp: 20, schedule: { startHour: 9, endHour: 17 }, reputation: { business: 1 } },
+  { id: "job-security", name: "Security", minLevel: 4, energyCost: 13, timeCost: 4, durationMinutes: 420, income: 500, xp: 20, careerXp: 22, schedule: { startHour: 18, endHour: 2 }, reputation: { city: 1, faction: 1 } },
+  { id: "job-hotel", name: "Hotel Worker", minLevel: 3, energyCost: 11, timeCost: 4, durationMinutes: 360, income: 380, xp: 17, careerXp: 18, schedule: { startHour: 10, endHour: 18 }, reputation: { city: 1, business: 1 } },
+  { id: "job-office", name: "Office Worker", minLevel: 5, energyCost: 14, timeCost: 4, durationMinutes: 420, income: 600, xp: 24, careerXp: 26, schedule: { startHour: 9, endHour: 17 }, reputation: { business: 2 } },
+  { id: "job-assistant", name: "Assistant", minLevel: 4, energyCost: 12, timeCost: 4, durationMinutes: 360, income: 460, xp: 19, careerXp: 20, schedule: { startHour: 9, endHour: 17 }, reputation: { business: 1, city: 1 } },
+  { id: "job-designer", name: "Designer", minLevel: 6, energyCost: 13, timeCost: 4, durationMinutes: 360, income: 680, xp: 26, careerXp: 28, schedule: { startHour: 10, endHour: 18 }, reputation: { business: 2, city: 1 } },
+  { id: "job-manager", name: "Manager", minLevel: 8, energyCost: 15, timeCost: 5, durationMinutes: 480, income: 900, xp: 32, careerXp: 36, schedule: { startHour: 9, endHour: 18 }, reputation: { business: 3, city: 2 } }
 ];
 
 export const CRIME_OPERATIONS = [
