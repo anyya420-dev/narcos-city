@@ -1906,250 +1906,6 @@ export function buyProperty(state, propertyId) {
     addNotification(state, "Property", "Property not found.", "error");
     return state;
   }
-
-  export function rentProperty(state, propertyId, mode = "weekly") {
-    if (blockedByPrison(state)) return state;
-    ensureLifeState(state);
-    const property = state.properties.find((entry) => entry.id === propertyId);
-    if (!property) {
-      addNotification(state, "Housing", "Property not found.", "error");
-      return state;
-    }
-    if (property.owned) {
-      addNotification(state, "Housing", "You already own this property.", "info");
-      return state;
-    }
-    const rent = mode === "monthly" ? property.rentMonthly || property.rentWeekly * 4 : property.rentWeekly || 400;
-    if (!addWallet(state, -rent, "rent", `${mode === "monthly" ? "Monthly" : "Weekly"} rent · ${property.name}`, "expense")) {
-      addNotification(state, "Housing", "Insufficient cash for rent.", "error");
-      return state;
-    }
-    state.life.residence = {
-      propertyId: property.id,
-      type: property.type,
-      district: property.district,
-      ownership: "Rented",
-      rentDueDay: state.time.day + (mode === "monthly" ? 30 : 7),
-      rentOverdueDays: 0
-    };
-    property.rented = true;
-    setNeeds(state, { mood: 4 });
-    addCalendarEvent(state, { type: "Housing", title: `Rented ${property.name}` });
-    addNotification(state, "Housing", `Residence set: ${property.name} (${mode}).`, "success");
-    return state;
-  }
-
-  export function payRent(state) {
-    ensureLifeState(state);
-    const residence = state.life.residence;
-    if (!residence?.propertyId || residence.ownership !== "Rented") {
-      addNotification(state, "Housing", "No active rent contract.", "info");
-      return state;
-    }
-    const property = state.properties.find((entry) => entry.id === residence.propertyId);
-    const rent = property?.rentWeekly || 400;
-    if (!addWallet(state, -rent, "rent", `Manual rent payment · ${property?.name || "Residence"}`, "expense")) {
-      addNotification(state, "Housing", "Insufficient cash for rent payment.", "error");
-      return state;
-    }
-    residence.rentDueDay = Math.max(state.time.day + 7, (residence.rentDueDay || state.time.day) + 7);
-    residence.rentOverdueDays = 0;
-    setNeeds(state, { mood: 2 });
-    addNotification(state, "Housing", `Rent paid for ${property?.name || "residence"}.`, "success");
-    return state;
-  }
-
-  export function changeOutfit(state, preset = "Casual") {
-    ensureLifeState(state);
-    if (!OUTFIT_PRESETS.includes(preset)) {
-      addNotification(state, "Style", "Outfit preset unavailable.", "error");
-      return state;
-    }
-    if (!state.life.wardrobe.unlockedPresets.includes(preset)) {
-      const unlockCost = preset === "Luxury" ? 1200 : preset === "Elegant" ? 600 : 380;
-      if (!addWallet(state, -unlockCost, "wardrobe", `Unlock ${preset} outfit`, "expense")) {
-        addNotification(state, "Style", "Insufficient cash to unlock outfit.", "error");
-        return state;
-      }
-      state.life.wardrobe.unlockedPresets.push(preset);
-    }
-    state.life.wardrobe.currentPreset = preset;
-    if (["Elegant", "Luxury", "Business"].includes(preset)) {
-      state.player.charisma += 1;
-      addGeneralReputation(state, "city", 1);
-    }
-    if (preset === "Street") addGeneralReputation(state, "street", 1);
-    if (preset === "Sport") state.player.energy = clamp(state.player.energy + 6, 0, 100);
-    setNeeds(state, { mood: 3, hygiene: -1 });
-    advanceByMinutes(state, 20);
-    addNotification(state, "Style", `${preset} outfit equipped.`, "success");
-    return state;
-  }
-
-  export function performLifeActivity(state, activityId, payload = {}) {
-    if (blockedByPrison(state)) return state;
-    ensureLifeState(state);
-    const activities = {
-      eat: { minutes: 30, cost: 80, source: "food", needs: { hunger: 24, mood: 3 }, energy: 6, health: 2 },
-      sleep: { minutes: 480, needs: { hunger: -8, hygiene: 6, mood: 10 }, energy: 48, health: 16 },
-      rest: { minutes: 120, needs: { hunger: -2, mood: 5 }, energy: 24, health: 6 },
-      shower: { minutes: 25, needs: { hygiene: 26, mood: 2 }, energy: -1 },
-      study: { minutes: 180, needs: { hunger: -4, hygiene: -2, mood: -1 }, intelligence: 2, educationPoints: 6 },
-      exercise: { minutes: 90, needs: { hunger: -6, hygiene: -6, mood: 4 }, energy: -12, strength: 2 },
-      socialize: { minutes: 120, cost: 110, source: "entertainment", needs: { hunger: -3, hygiene: -2, mood: 7 }, charisma: 1 },
-      "manage-home": { minutes: 60, cost: 40, source: "housing", needs: { mood: 4, hygiene: -1 }, influence: 1 },
-      "manage-property": { minutes: 90, cost: 120, source: "property", needs: { mood: 2 }, influence: 1, cityRep: 1 }
-    };
-    const activity = activities[activityId];
-    if (!activity) {
-      addNotification(state, "Life", "Activity unavailable.", "error");
-      return state;
-    }
-    if (activity.cost && !addWallet(state, -activity.cost, activity.source || "other", `Activity: ${activityId}`, "expense")) {
-      addNotification(state, "Life", "Insufficient cash for activity.", "error");
-      return state;
-    }
-    setNeeds(state, activity.needs || {});
-    if (activity.energy) state.player.energy = clamp(state.player.energy + activity.energy, 0, 100);
-    if (activity.health) state.player.health = clamp(state.player.health + activity.health, 0, 100);
-    if (activity.intelligence) state.player.intelligence += activity.intelligence;
-    if (activity.strength) state.player.strength += activity.strength;
-    if (activity.charisma) state.player.charisma += activity.charisma;
-    if (activity.influence) addInfluence(state, activity.influence);
-    if (activity.cityRep) addGeneralReputation(state, "city", activity.cityRep);
-    if (activity.educationPoints) state.life.education.points += activity.educationPoints;
-    addCalendarEvent(state, { type: "Activity", title: activityId });
-    advanceByMinutes(state, activity.minutes);
-    evaluatePostAction(state, "action");
-    addNotification(state, "Life", `${activityId} completed.`, "success");
-    return state;
-  }
-
-  export function startDateWithNpc(state, npcId, venue = "restaurant") {
-    if (blockedByPrison(state)) return state;
-    ensureLifeState(state);
-    const npc = state.npcs.find((entry) => entry.id === npcId);
-    if (!npc) {
-      addNotification(state, "Social", "Date target unavailable.", "error");
-      return state;
-    }
-    const relation = ensureRelation(state, npcId);
-    const baseCostMap = { restaurant: 180, cafe: 90, park: 30, nightclub: 230, "luxury-venue": 360, entertainment: 140 };
-    const cost = baseCostMap[venue] ?? 120;
-    if (!addWallet(state, -cost, "date", `Date with ${npc.name} at ${venue}`, "expense")) {
-      addNotification(state, "Social", "Insufficient cash for date.", "error");
-      return state;
-    }
-    const personalityBonus = ["charming", "warm", "confident"].includes(npc.personality) ? 2 : 0;
-    const styleBonus = ["Elegant", "Luxury", "Nightlife"].includes(state.life.wardrobe.currentPreset) ? 2 : 0;
-    const charismaFactor = Math.floor(state.player.charisma / 10);
-    const venueBonus = venue === "luxury-venue" && state.life.lifestyle !== "Poor" ? 2 : venue === "park" ? 1 : 0;
-    const delta = clamp(3 + personalityBonus + styleBonus + charismaFactor + venueBonus + Math.floor((relation.value - 20) / 20), -2, 16);
-    relation.value = clamp(relation.value + delta, -100, 100);
-    relation.romance = clamp(relation.romance + Math.max(1, Math.round(delta / 2)), 0, 100);
-    relation.friendship = clamp(relation.friendship + Math.max(1, Math.round(delta / 2)), 0, 100);
-    relation.trust = clamp(relation.trust + Math.max(1, Math.round(delta / 3)), 0, 100);
-    if (relation.romance >= 25) relation.romanceStage = "interest";
-    if (relation.romance >= 45) relation.romanceStage = "dating";
-    if (relation.romance >= 65) relation.romanceStage = "relationship";
-    relation.status = relationshipStatus(relation.value);
-    relation.history.unshift({ id: makeId("date"), interactionType: "date", venue, delta, day: state.time.day, turn: state.time.turn });
-    relation.history = relation.history.slice(0, 30);
-    if (state.relationshipsFoundation.marriage?.partnerId && state.relationshipsFoundation.marriage.partnerId !== npcId) {
-      const spouseRel = ensureRelation(state, state.relationshipsFoundation.marriage.partnerId);
-      spouseRel.trust = clamp(spouseRel.trust - 8, 0, 100);
-      spouseRel.value = clamp(spouseRel.value - 6, -100, 100);
-      spouseRel.history.unshift({
-        id: makeId("conflict"),
-        interactionType: "jealousy",
-        day: state.time.day,
-        turn: state.time.turn,
-        delta: -6
-      });
-      spouseRel.history = spouseRel.history.slice(0, 30);
-      addGeneralReputation(state, "city", -1);
-      addNotification(state, "Social", "Relationship conflict triggered by external romance.", "error");
-    }
-    setNeeds(state, { hunger: -5, hygiene: -2, mood: Math.max(2, Math.round(delta / 2)) });
-    addCalendarEvent(state, { type: "Date", title: `${npc.name} · ${venue}` });
-    advanceByMinutes(state, 180);
-    state.life.relationshipStatus = relation.romance >= 45 ? "Dating" : state.life.relationshipStatus;
-    addNotification(state, "Social", `Date with ${npc.name} complete (${delta >= 0 ? "+" : ""}${delta}).`, delta >= 0 ? "success" : "error");
-    return state;
-  }
-
-  export function proposeToNpc(state, npcId) {
-    ensureLifeState(state);
-    const npc = state.npcs.find((entry) => entry.id === npcId);
-    const relation = ensureRelation(state, npcId);
-    if (!npc) {
-      addNotification(state, "Social", "NPC unavailable.", "error");
-      return state;
-    }
-    if (relation.romance < 70 || relation.trust < 55 || relation.value < 75) {
-      addNotification(state, "Social", "Relationship not ready for proposal.", "error");
-      return state;
-    }
-    if (!addWallet(state, -700, "event", `Engagement ring for ${npc.name}`, "expense")) {
-      addNotification(state, "Social", "Insufficient money for proposal.", "error");
-      return state;
-    }
-    relation.romanceStage = "engaged";
-    state.relationshipsFoundation.partnerId = npcId;
-    state.life.relationshipStatus = "Engaged";
-    addCalendarEvent(state, { type: "Engagement", title: `Engaged to ${npc.name}` });
-    addNotification(state, "Social", `Proposal accepted by ${npc.name}.`, "success");
-    return state;
-  }
-
-  export function hostSocialEvent(state, eventType = "party") {
-    ensureLifeState(state);
-    const eventCost = {
-      birthday: 180,
-      dinner: 220,
-      party: 320,
-      "club-night": 360,
-      wedding: 1800,
-      engagement: 700,
-      "house-party": 260,
-      "business-event": 500
-    }[eventType] ?? 200;
-    if (!addWallet(state, -eventCost, "event", `Host ${eventType}`, "expense")) {
-      addNotification(state, "Social", "Insufficient funds for event.", "error");
-      return state;
-    }
-    let moodBoost = 5;
-    let repBoost = 1;
-    if (eventType === "wedding") {
-      const partnerId = state.relationshipsFoundation.partnerId;
-      const partner = partnerId ? state.npcs.find((entry) => entry.id === partnerId) : null;
-      if (!partner || ensureRelation(state, partnerId).romance < 70) {
-        addNotification(state, "Social", "Wedding requires an engaged partner.", "error");
-        addWallet(state, eventCost, "event", "Refund wedding", "income");
-        return state;
-      }
-      const rel = ensureRelation(state, partnerId);
-      rel.status = "Spouse";
-      rel.romanceStage = "married";
-      state.relationshipsFoundation.marriage = {
-        partnerId,
-        day: state.time.day,
-        month: state.time.month,
-        year: state.time.year
-      };
-      state.life.relationshipStatus = "Married";
-      moodBoost = 12;
-      repBoost = 3;
-    }
-    if (eventType === "business-event") repBoost = 2;
-    setNeeds(state, { mood: moodBoost, hygiene: -3, hunger: -4 });
-    addGeneralReputation(state, "city", repBoost);
-    addInfluence(state, 1 + Math.floor(repBoost / 2));
-    addCalendarEvent(state, { type: "Event", title: eventType });
-    advanceByMinutes(state, eventType === "wedding" ? 420 : 180);
-    addNotification(state, "Social", `${eventType} completed.`, "success");
-    return state;
-  }
   if (property.owned) {
     addNotification(state, "Property", `${property.name} already owned.`, "info");
     return state;
@@ -2179,6 +1935,250 @@ export function buyProperty(state, propertyId) {
   refreshQuests(state);
   refreshAchievements(state);
   addNotification(state, "Property", `Purchased ${property.name}.`, "success");
+  return state;
+}
+
+export function rentProperty(state, propertyId, mode = "weekly") {
+  if (blockedByPrison(state)) return state;
+  ensureLifeState(state);
+  const property = state.properties.find((entry) => entry.id === propertyId);
+  if (!property) {
+    addNotification(state, "Housing", "Property not found.", "error");
+    return state;
+  }
+  if (property.owned) {
+    addNotification(state, "Housing", "You already own this property.", "info");
+    return state;
+  }
+  const rent = mode === "monthly" ? property.rentMonthly || property.rentWeekly * 4 : property.rentWeekly || 400;
+  if (!addWallet(state, -rent, "rent", `${mode === "monthly" ? "Monthly" : "Weekly"} rent · ${property.name}`, "expense")) {
+    addNotification(state, "Housing", "Insufficient cash for rent.", "error");
+    return state;
+  }
+  state.life.residence = {
+    propertyId: property.id,
+    type: property.type,
+    district: property.district,
+    ownership: "Rented",
+    rentDueDay: state.time.day + (mode === "monthly" ? 30 : 7),
+    rentOverdueDays: 0
+  };
+  property.rented = true;
+  setNeeds(state, { mood: 4 });
+  addCalendarEvent(state, { type: "Housing", title: `Rented ${property.name}` });
+  addNotification(state, "Housing", `Residence set: ${property.name} (${mode}).`, "success");
+  return state;
+}
+
+export function payRent(state) {
+  ensureLifeState(state);
+  const residence = state.life.residence;
+  if (!residence?.propertyId || residence.ownership !== "Rented") {
+    addNotification(state, "Housing", "No active rent contract.", "info");
+    return state;
+  }
+  const property = state.properties.find((entry) => entry.id === residence.propertyId);
+  const rent = property?.rentWeekly || 400;
+  if (!addWallet(state, -rent, "rent", `Manual rent payment · ${property?.name || "Residence"}`, "expense")) {
+    addNotification(state, "Housing", "Insufficient cash for rent payment.", "error");
+    return state;
+  }
+  residence.rentDueDay = Math.max(state.time.day + 7, (residence.rentDueDay || state.time.day) + 7);
+  residence.rentOverdueDays = 0;
+  setNeeds(state, { mood: 2 });
+  addNotification(state, "Housing", `Rent paid for ${property?.name || "residence"}.`, "success");
+  return state;
+}
+
+export function changeOutfit(state, preset = "Casual") {
+  ensureLifeState(state);
+  if (!OUTFIT_PRESETS.includes(preset)) {
+    addNotification(state, "Style", "Outfit preset unavailable.", "error");
+    return state;
+  }
+  if (!state.life.wardrobe.unlockedPresets.includes(preset)) {
+    const unlockCost = preset === "Luxury" ? 1200 : preset === "Elegant" ? 600 : 380;
+    if (!addWallet(state, -unlockCost, "wardrobe", `Unlock ${preset} outfit`, "expense")) {
+      addNotification(state, "Style", "Insufficient cash to unlock outfit.", "error");
+      return state;
+    }
+    state.life.wardrobe.unlockedPresets.push(preset);
+  }
+  state.life.wardrobe.currentPreset = preset;
+  if (["Elegant", "Luxury", "Business"].includes(preset)) {
+    state.player.charisma += 1;
+    addGeneralReputation(state, "city", 1);
+  }
+  if (preset === "Street") addGeneralReputation(state, "street", 1);
+  if (preset === "Sport") state.player.energy = clamp(state.player.energy + 6, 0, 100);
+  setNeeds(state, { mood: 3, hygiene: -1 });
+  advanceByMinutes(state, 20);
+  addNotification(state, "Style", `${preset} outfit equipped.`, "success");
+  return state;
+}
+
+export function performLifeActivity(state, activityId, payload = {}) {
+  if (blockedByPrison(state)) return state;
+  ensureLifeState(state);
+  const activities = {
+    eat: { minutes: 30, cost: 80, source: "food", needs: { hunger: 24, mood: 3 }, energy: 6, health: 2 },
+    sleep: { minutes: 480, needs: { hunger: -8, hygiene: 6, mood: 10 }, energy: 48, health: 16 },
+    rest: { minutes: 120, needs: { hunger: -2, mood: 5 }, energy: 24, health: 6 },
+    shower: { minutes: 25, needs: { hygiene: 26, mood: 2 }, energy: -1 },
+    study: { minutes: 180, needs: { hunger: -4, hygiene: -2, mood: -1 }, intelligence: 2, educationPoints: 6 },
+    exercise: { minutes: 90, needs: { hunger: -6, hygiene: -6, mood: 4 }, energy: -12, strength: 2 },
+    socialize: { minutes: 120, cost: 110, source: "entertainment", needs: { hunger: -3, hygiene: -2, mood: 7 }, charisma: 1 },
+    "manage-home": { minutes: 60, cost: 40, source: "housing", needs: { mood: 4, hygiene: -1 }, influence: 1 },
+    "manage-property": { minutes: 90, cost: 120, source: "property", needs: { mood: 2 }, influence: 1, cityRep: 1 }
+  };
+  const activity = activities[activityId];
+  if (!activity) {
+    addNotification(state, "Life", "Activity unavailable.", "error");
+    return state;
+  }
+  if (activity.cost && !addWallet(state, -activity.cost, activity.source || "other", `Activity: ${activityId}`, "expense")) {
+    addNotification(state, "Life", "Insufficient cash for activity.", "error");
+    return state;
+  }
+  setNeeds(state, activity.needs || {});
+  if (activity.energy) state.player.energy = clamp(state.player.energy + activity.energy, 0, 100);
+  if (activity.health) state.player.health = clamp(state.player.health + activity.health, 0, 100);
+  if (activity.intelligence) state.player.intelligence += activity.intelligence;
+  if (activity.strength) state.player.strength += activity.strength;
+  if (activity.charisma) state.player.charisma += activity.charisma;
+  if (activity.influence) addInfluence(state, activity.influence);
+  if (activity.cityRep) addGeneralReputation(state, "city", activity.cityRep);
+  if (activity.educationPoints) state.life.education.points += activity.educationPoints;
+  addCalendarEvent(state, { type: "Activity", title: activityId });
+  advanceByMinutes(state, activity.minutes);
+  evaluatePostAction(state, "action");
+  addNotification(state, "Life", `${activityId} completed.`, "success");
+  return state;
+}
+
+export function startDateWithNpc(state, npcId, venue = "restaurant") {
+  if (blockedByPrison(state)) return state;
+  ensureLifeState(state);
+  const npc = state.npcs.find((entry) => entry.id === npcId);
+  if (!npc) {
+    addNotification(state, "Social", "Date target unavailable.", "error");
+    return state;
+  }
+  const relation = ensureRelation(state, npcId);
+  const baseCostMap = { restaurant: 180, cafe: 90, park: 30, nightclub: 230, "luxury-venue": 360, entertainment: 140 };
+  const cost = baseCostMap[venue] ?? 120;
+  if (!addWallet(state, -cost, "date", `Date with ${npc.name} at ${venue}`, "expense")) {
+    addNotification(state, "Social", "Insufficient cash for date.", "error");
+    return state;
+  }
+  const personalityBonus = ["charming", "warm", "confident"].includes(npc.personality) ? 2 : 0;
+  const styleBonus = ["Elegant", "Luxury", "Nightlife"].includes(state.life.wardrobe.currentPreset) ? 2 : 0;
+  const charismaFactor = Math.floor(state.player.charisma / 10);
+  const venueBonus = venue === "luxury-venue" && state.life.lifestyle !== "Poor" ? 2 : venue === "park" ? 1 : 0;
+  const delta = clamp(3 + personalityBonus + styleBonus + charismaFactor + venueBonus + Math.floor((relation.value - 20) / 20), -2, 16);
+  relation.value = clamp(relation.value + delta, -100, 100);
+  relation.romance = clamp(relation.romance + Math.max(1, Math.round(delta / 2)), 0, 100);
+  relation.friendship = clamp(relation.friendship + Math.max(1, Math.round(delta / 2)), 0, 100);
+  relation.trust = clamp(relation.trust + Math.max(1, Math.round(delta / 3)), 0, 100);
+  if (relation.romance >= 25) relation.romanceStage = "interest";
+  if (relation.romance >= 45) relation.romanceStage = "dating";
+  if (relation.romance >= 65) relation.romanceStage = "relationship";
+  relation.status = relationshipStatus(relation.value);
+  relation.history.unshift({ id: makeId("date"), interactionType: "date", venue, delta, day: state.time.day, turn: state.time.turn });
+  relation.history = relation.history.slice(0, 30);
+  if (state.relationshipsFoundation.marriage?.partnerId && state.relationshipsFoundation.marriage.partnerId !== npcId) {
+    const spouseRel = ensureRelation(state, state.relationshipsFoundation.marriage.partnerId);
+    spouseRel.trust = clamp(spouseRel.trust - 8, 0, 100);
+    spouseRel.value = clamp(spouseRel.value - 6, -100, 100);
+    spouseRel.history.unshift({
+      id: makeId("conflict"),
+      interactionType: "jealousy",
+      day: state.time.day,
+      turn: state.time.turn,
+      delta: -6
+    });
+    spouseRel.history = spouseRel.history.slice(0, 30);
+    addGeneralReputation(state, "city", -1);
+    addNotification(state, "Social", "Relationship conflict triggered by external romance.", "error");
+  }
+  setNeeds(state, { hunger: -5, hygiene: -2, mood: Math.max(2, Math.round(delta / 2)) });
+  addCalendarEvent(state, { type: "Date", title: `${npc.name} · ${venue}` });
+  advanceByMinutes(state, 180);
+  state.life.relationshipStatus = relation.romance >= 45 ? "Dating" : state.life.relationshipStatus;
+  addNotification(state, "Social", `Date with ${npc.name} complete (${delta >= 0 ? "+" : ""}${delta}).`, delta >= 0 ? "success" : "error");
+  return state;
+}
+
+export function proposeToNpc(state, npcId) {
+  ensureLifeState(state);
+  const npc = state.npcs.find((entry) => entry.id === npcId);
+  const relation = ensureRelation(state, npcId);
+  if (!npc) {
+    addNotification(state, "Social", "NPC unavailable.", "error");
+    return state;
+  }
+  if (relation.romance < 70 || relation.trust < 55 || relation.value < 75) {
+    addNotification(state, "Social", "Relationship not ready for proposal.", "error");
+    return state;
+  }
+  if (!addWallet(state, -700, "event", `Engagement ring for ${npc.name}`, "expense")) {
+    addNotification(state, "Social", "Insufficient money for proposal.", "error");
+    return state;
+  }
+  relation.romanceStage = "engaged";
+  state.relationshipsFoundation.partnerId = npcId;
+  state.life.relationshipStatus = "Engaged";
+  addCalendarEvent(state, { type: "Engagement", title: `Engaged to ${npc.name}` });
+  addNotification(state, "Social", `Proposal accepted by ${npc.name}.`, "success");
+  return state;
+}
+
+export function hostSocialEvent(state, eventType = "party") {
+  ensureLifeState(state);
+  const eventCost = {
+    birthday: 180,
+    dinner: 220,
+    party: 320,
+    "club-night": 360,
+    wedding: 1800,
+    engagement: 700,
+    "house-party": 260,
+    "business-event": 500
+  }[eventType] ?? 200;
+  if (!addWallet(state, -eventCost, "event", `Host ${eventType}`, "expense")) {
+    addNotification(state, "Social", "Insufficient funds for event.", "error");
+    return state;
+  }
+  let moodBoost = 5;
+  let repBoost = 1;
+  if (eventType === "wedding") {
+    const partnerId = state.relationshipsFoundation.partnerId;
+    const partner = partnerId ? state.npcs.find((entry) => entry.id === partnerId) : null;
+    if (!partner || ensureRelation(state, partnerId).romance < 70) {
+      addNotification(state, "Social", "Wedding requires an engaged partner.", "error");
+      addWallet(state, eventCost, "event", "Refund wedding", "income");
+      return state;
+    }
+    const rel = ensureRelation(state, partnerId);
+    rel.status = "Spouse";
+    rel.romanceStage = "married";
+    state.relationshipsFoundation.marriage = {
+      partnerId,
+      day: state.time.day,
+      month: state.time.month,
+      year: state.time.year
+    };
+    state.life.relationshipStatus = "Married";
+    moodBoost = 12;
+    repBoost = 3;
+  }
+  if (eventType === "business-event") repBoost = 2;
+  setNeeds(state, { mood: moodBoost, hygiene: -3, hunger: -4 });
+  addGeneralReputation(state, "city", repBoost);
+  addInfluence(state, 1 + Math.floor(repBoost / 2));
+  addCalendarEvent(state, { type: "Event", title: eventType });
+  advanceByMinutes(state, eventType === "wedding" ? 420 : 180);
+  addNotification(state, "Social", `${eventType} completed.`, "success");
   return state;
 }
 
