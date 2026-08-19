@@ -89,6 +89,11 @@ let loading = true;
 let startedFromMenu = false;
 let runtimeNotice = "";
 
+function setGameplayMode(active) {
+  document.body.classList.toggle("gameplay-mode", !!active);
+  document.body.classList.toggle("no-page-scroll", !!active);
+}
+
 function persist() {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
@@ -292,89 +297,28 @@ function renderCity() {
     cityWorldSession = null;
   }
   const district = getSelectedDistrict(state);
-  const location = getCurrentLocation(state);
-
-  const locationsMarkup = district.locations
-    .map((locationId) => {
-      const loc = LOCATIONS[locationId];
-      const active = locationId === state.currentLocationId ? " active-location" : "";
-      return `
-        <article class="card${active}">
-          <h4>${escapeHtml(loc.name)}</h4>
-          <p class="muted">${escapeHtml(loc.description)}</p>
-          <div class="actions">
-            <button data-action="enter-location" data-district-id="${district.id}" data-location-id="${locationId}">Enter</button>
-          </div>
-        </article>
-      `;
-    })
-    .join("");
-
-  const actionButtons = location.actions
-    .map((action) => `<button data-action="location-action" data-district-id="${district.id}" data-location-id="${location.id}" data-action-id="${action.id}">${escapeHtml(action.name)}</button>`)
-    .join("");
-
-  const npcCards = getNpcsAtLocation(state, location.id)
-    .map((npc) => {
-      const rel = state.relationships[npc.id] || { value: 0, status: "Stranger" };
-      return `
-        <article class="stat">
-          <span>${escapeHtml(npc.name)} · ${escapeHtml(npc.role)}</span>
-          <strong>${rel.value} · ${escapeHtml(rel.status)}</strong>
-          <p class="muted">${escapeHtml(npc.dialogue[0] || "")}</p>
-          <div class="actions">
-            <button data-action="npc-action" data-npc-id="${npc.id}" data-npc-interaction="talk">Talk</button>
-            <button data-action="npc-action" data-npc-id="${npc.id}" data-npc-interaction="socialize">Socialize</button>
-            <button data-action="npc-action" data-npc-id="${npc.id}" data-npc-interaction="help">Help</button>
-            <button data-action="npc-action" data-npc-id="${npc.id}" data-npc-interaction="give-gift">Gift</button>
-            <button data-action="npc-action" data-npc-id="${npc.id}" data-npc-interaction="work-together">Work Together</button>
-          </div>
-        </article>
-      `;
-    })
-    .join("");
 
   root.innerHTML = `
-    <section class="card marble">
-      <h2>Third-Person City World</h2>
-      <p class="muted">Walk physically through the district. Use ACTION near doors, NPCs, vehicles, and district markers.</p>
+    <section class="city-gameplay-shell">
       ${
         state.world?.currentInteriorId
-          ? `<p class="muted">Interior: ${escapeHtml(LOCATIONS[state.world.currentInteriorId]?.name || state.world.currentInteriorId)}</p>
-             <div class="actions"><button data-action="exit-interior">Exit Interior</button></div>`
+          ? `<div class="city-interior-pill">INTERIOR · ${escapeHtml(LOCATIONS[state.world.currentInteriorId]?.name || state.world.currentInteriorId)}</div>`
           : ""
       }
       <div id="city-world-3d-container" class="city-world-3d-container"></div>
     </section>
-    <section class="card marble">
-      <h2>${escapeHtml(district.name)}</h2>
-      <p class="muted">${escapeHtml(district.description)}</p>
-      <p class="muted">Atmosphere: ${escapeHtml(district.atmosphere)} · Danger ${district.dangerLevel}/5 · Wealth ${district.wealthLevel}/5</p>
-      <div class="actions">
-        <button data-action="claim-daily">Claim Daily Reward</button>
-        <button data-action="safehouse-rest">Rest</button>
-        <button data-action="safehouse-energy">Recover Energy</button>
-      </div>
-    </section>
-    ${renderEventPanel()}
-    <section class="card">
-      <h3>District Locations</h3>
-      ${locationsMarkup}
-    </section>
-    <section class="card">
-      <h3>${escapeHtml(location.name)} Actions</h3>
-      <div class="actions">${actionButtons}</div>
-    </section>
-    <section class="card">
-      <h3>People Here</h3>
-      ${npcCards || '<p class="muted">No contacts at this location.</p>'}
+    <section class="city-quick-actions">
+      <button data-action="claim-daily">DAILY</button>
+      <button data-action="safehouse-rest">REST</button>
+      <button data-action="safehouse-energy">ENERGY</button>
+      <button data-action="menu-map">MAP</button>
     </section>
   `;
 
   const worldContainer = document.getElementById("city-world-3d-container");
   const mountFallbackWorld = () => {
     state.meta.disable3dWorld = true;
-    setRuntimeNotice("3D world unavailable in this browser. Core city gameplay remains playable from the panels below.");
+    setRuntimeNotice("3D world unavailable in this browser. Use map, quests, inventory, and profile panels.");
     if (worldContainer) {
       worldContainer.innerHTML = `
         <div class="city-world-stage">
@@ -399,6 +343,18 @@ function renderCity() {
       container: worldContainer,
       state,
       settings: state.settings,
+      onMenuAction: (menuAction) => {
+        if (menuAction === "resume") return;
+        if (menuAction === "map") navigateTo(state, "districts");
+        if (menuAction === "quests") navigateTo(state, "quests");
+        if (menuAction === "inventory") navigateTo(state, "inventory");
+        if (menuAction === "profile") navigateTo(state, "profile");
+        if (menuAction === "settings") navigateTo(state, "settings");
+        if (menuAction === "save") setRuntimeNotice("Progress saved.");
+        if (menuAction === "main-menu") navigateTo(state, "main-menu");
+        persist();
+        render();
+      },
       onError: () => {
         cityWorldSession = null;
         mountFallbackWorld();
@@ -855,6 +811,8 @@ function renderQuests() {
 
 function render() {
   try {
+    const gameplayMode = !loading && state.meta.hasCreatedCharacter && state.currentScreen === "city";
+    setGameplayMode(gameplayMode);
     root.classList.remove("screen-enter");
     void root.offsetWidth;
     root.classList.add("screen-enter");
@@ -870,7 +828,7 @@ function render() {
       return;
     }
 
-    const navVisible = state.meta.hasCreatedCharacter && ["city", "districts", "profile", "inventory", "quests", "settings"].includes(state.currentScreen);
+    const navVisible = state.meta.hasCreatedCharacter && ["districts", "profile", "inventory", "quests", "settings"].includes(state.currentScreen);
     nav.style.display = navVisible ? "grid" : "none";
     nav.querySelectorAll("button").forEach((button) => {
       button.classList.toggle("active", button.dataset.screen === state.currentScreen);
@@ -882,7 +840,15 @@ function render() {
         cityWorldSession.destroy();
         cityWorldSession = null;
       }
-      renderStatus();
+      if (gameplayMode) {
+        statusBar.innerHTML = "";
+      } else {
+        if (cityWorldSession) {
+          cityWorldSession.destroy();
+          cityWorldSession = null;
+        }
+        renderStatus();
+      }
       renderMainMenu();
       return;
     }
@@ -918,6 +884,7 @@ function render() {
       cityWorldSession = null;
     }
     nav.style.display = "none";
+    setGameplayMode(false);
     setRuntimeNotice("A UI error occurred. You can continue by returning to the main menu.");
     renderStatus();
     root.innerHTML = `
@@ -1015,6 +982,13 @@ root.addEventListener("click", (event) => {
     }
     if (action === "menu-settings") {
       navigateTo(state, "settings");
+      setRuntimeNotice("");
+      persist();
+      render();
+      return;
+    }
+    if (action === "menu-map") {
+      navigateTo(state, "districts");
       setRuntimeNotice("");
       persist();
       render();

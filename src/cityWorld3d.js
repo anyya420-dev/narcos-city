@@ -16,6 +16,8 @@ const DECELERATION = 16;
 const GRAVITY = 20;
 const JUMP_VELOCITY = 6.2;
 const CAMERA_DISTANCE = 7.8;
+const CAMERA_MIN_DISTANCE = 5.2;
+const CAMERA_MAX_DISTANCE = 11.8;
 const CAMERA_HEIGHT = 3.1;
 const BASE_LOOK_SENSITIVITY = 0.0038;
 const INTERACTION_RANGE = 3.4;
@@ -438,7 +440,7 @@ function populateInteriors(scene, interiorType, markers) {
   scene.add(exitMarker);
 }
 
-export function mountCityWorld3d({ container, state, onInteract, onError, settings = {} }) {
+export function mountCityWorld3d({ container, state, onInteract, onMenuAction, onError, settings = {} }) {
   if (!container) return { destroy() {} };
   if (typeof window === "undefined" || !window.WebGLRenderingContext) {
     container.innerHTML = `<section class="card"><h3>3D Unsupported</h3><p class="muted">WebGL is unavailable on this device. Use City/District panels.</p></section>`;
@@ -454,12 +456,34 @@ export function mountCityWorld3d({ container, state, onInteract, onError, settin
     <div class="city-world-stage">
       <div class="city-world-canvas"></div>
       <div class="city-world-overlay">
-        <div class="city-world-heads-up">
-          <p><strong>${state.player.name || "La Reina"}</strong> · ${state.player.title} · ${state.player.status || "Active"}</p>
-          <p>${(state.selectedDistrictId || "").toUpperCase()} · ${state.currentLocationId}</p>
-          <p>Move: Left Stick/WASD · Look: Right Pad/Mouse · [E] Interact</p>
+        <div class="hud-corner hud-top-left">
+          <p>HP <strong>${Math.round(state.player.health)}</strong></p>
+          <p>EN <strong>${Math.round(state.player.energy)}</strong></p>
+        </div>
+        <div class="hud-corner hud-top-right">
+          <p>CASH <strong>$${Math.round(state.player.money).toLocaleString()}</strong></p>
+          <p>LVL <strong>${state.player.level}</strong> · REP <strong>${state.player.reputation.city}</strong></p>
+        </div>
+        <div class="hud-top-controls">
+          <button class="world-button small" id="pause-button" type="button" aria-label="Pause menu">☰</button>
+          <button class="world-button small" id="zoom-in-button" type="button" aria-label="Zoom in">＋</button>
+          <button class="world-button small" id="zoom-out-button" type="button" aria-label="Zoom out">－</button>
+          <button class="world-button small" id="fullscreen-button" type="button" aria-label="Toggle fullscreen">⛶</button>
         </div>
         <div class="interaction-prompt" id="interaction-prompt">Explore the city...</div>
+        <div class="pause-menu" id="pause-menu" hidden>
+          <h3>PAUSED</h3>
+          <div class="pause-grid">
+            <button data-menu="resume" type="button">Resume</button>
+            <button data-menu="map" type="button">Map</button>
+            <button data-menu="quests" type="button">Quests</button>
+            <button data-menu="inventory" type="button">Inventory</button>
+            <button data-menu="profile" type="button">Profile</button>
+            <button data-menu="settings" type="button">Settings</button>
+            <button data-menu="save" type="button">Save</button>
+            <button data-menu="main-menu" type="button">Exit Menu</button>
+          </div>
+        </div>
         <div class="city-world-controls" aria-hidden="true">
           <div class="left-controls">
             <div class="stick-base" id="move-stick"><div class="stick-knob" id="move-knob"></div></div>
@@ -468,6 +492,7 @@ export function mountCityWorld3d({ container, state, onInteract, onError, settin
             <div class="look-pad" id="look-pad">CAMERA</div>
             <button class="world-button run" id="run-button" type="button">RUN</button>
             <button class="world-button action" id="action-button" type="button">INTERACT</button>
+            <button class="world-button context" id="context-button" type="button">ACTION</button>
           </div>
         </div>
       </div>
@@ -481,6 +506,12 @@ export function mountCityWorld3d({ container, state, onInteract, onError, settin
   const lookPad = container.querySelector("#look-pad");
   const runButton = container.querySelector("#run-button");
   const actionButton = container.querySelector("#action-button");
+  const contextButton = container.querySelector("#context-button");
+  const pauseButton = container.querySelector("#pause-button");
+  const fullscreenButton = container.querySelector("#fullscreen-button");
+  const pauseMenu = container.querySelector("#pause-menu");
+  const zoomInButton = container.querySelector("#zoom-in-button");
+  const zoomOutButton = container.querySelector("#zoom-out-button");
 
   let renderer;
   try {
@@ -574,9 +605,46 @@ export function mountCityWorld3d({ container, state, onInteract, onError, settin
   let draggingMouse = false;
   let mouseX = 0;
   let mouseY = 0;
+  let paused = false;
+  let cameraDistance = CAMERA_DISTANCE;
+  let footstepTimer = 0;
   const cameraPos = new THREE.Vector3();
 
   const sensitivity = BASE_LOOK_SENSITIVITY * (settings.cameraSensitivity || 1);
+
+  function setPauseState(next) {
+    paused = !!next;
+    pauseMenu.hidden = !paused;
+    if (paused) {
+      keys.up = keys.down = keys.left = keys.right = false;
+      sprintHeld = false;
+      runButton.classList.remove("active");
+    }
+  }
+
+  function togglePause() {
+    setPauseState(!paused);
+  }
+
+  async function toggleFullscreen() {
+    const target = container.querySelector(".city-world-stage");
+    if (!target) return;
+    try {
+      if (document.fullscreenElement) {
+        await document.exitFullscreen?.();
+      } else if (target.requestFullscreen) {
+        await target.requestFullscreen();
+      } else if (target.webkitRequestFullscreen) {
+        target.webkitRequestFullscreen();
+      }
+    } catch {
+      // Ignore and keep viewport-sized mode.
+    }
+  }
+
+  function adjustCameraDistance(delta) {
+    cameraDistance = Math.max(CAMERA_MIN_DISTANCE, Math.min(CAMERA_MAX_DISTANCE, cameraDistance + delta));
+  }
 
   const updateLighting = () => {
     const phase = getDayPhase(state);
@@ -607,6 +675,12 @@ export function mountCityWorld3d({ container, state, onInteract, onError, settin
   };
 
   const keyDown = (event) => {
+    if (event.code === "Escape") {
+      event.preventDefault();
+      togglePause();
+      return;
+    }
+    if (paused) return;
     if (event.code === "KeyW" || event.code === "ArrowUp") keys.up = true;
     if (event.code === "KeyS" || event.code === "ArrowDown") keys.down = true;
     if (event.code === "KeyA" || event.code === "ArrowLeft") keys.left = true;
@@ -620,6 +694,7 @@ export function mountCityWorld3d({ container, state, onInteract, onError, settin
   };
 
   const keyUp = (event) => {
+    if (paused) return;
     if (event.code === "KeyW" || event.code === "ArrowUp") keys.up = false;
     if (event.code === "KeyS" || event.code === "ArrowDown") keys.down = false;
     if (event.code === "KeyA" || event.code === "ArrowLeft") keys.left = false;
@@ -628,6 +703,7 @@ export function mountCityWorld3d({ container, state, onInteract, onError, settin
   };
 
   const onMouseDown = (event) => {
+    if (paused) return;
     if (event.button !== 0) return;
     draggingMouse = true;
     mouseX = event.clientX;
@@ -656,6 +732,7 @@ export function mountCityWorld3d({ container, state, onInteract, onError, settin
 
   const joystick = createJoystick(moveStick, moveKnob);
   const look = createLookPad(lookPad, (dx, dy) => {
+    if (paused) return;
     yaw -= dx * sensitivity;
     pitch = Math.max(-0.98, Math.min(-0.07, pitch - dy * sensitivity * 0.8));
   });
@@ -672,9 +749,36 @@ export function mountCityWorld3d({ container, state, onInteract, onError, settin
   runButton.addEventListener("pointerdown", toggleSprintOn);
   runButton.addEventListener("pointerup", toggleSprintOff);
   runButton.addEventListener("pointercancel", toggleSprintOff);
-  actionButton.addEventListener("click", () => triggerInteraction());
+  const onActionClick = () => triggerInteraction();
+  const onContextClick = () => triggerInteraction();
+  const onPauseClick = () => togglePause();
+  const onFullscreenClick = () => toggleFullscreen();
+  const onZoomInClick = () => adjustCameraDistance(-0.6);
+  const onZoomOutClick = () => adjustCameraDistance(0.6);
+  const onWheelZoom = (event) => {
+    event.preventDefault();
+    adjustCameraDistance(Math.sign(event.deltaY) * 0.5);
+  };
+  actionButton.addEventListener("click", onActionClick);
+  contextButton.addEventListener("click", onContextClick);
+  pauseButton.addEventListener("click", onPauseClick);
+  fullscreenButton.addEventListener("click", onFullscreenClick);
+  zoomInButton.addEventListener("click", onZoomInClick);
+  zoomOutButton.addEventListener("click", onZoomOutClick);
+  renderer.domElement.addEventListener("wheel", onWheelZoom, { passive: false });
+  const pauseMenuButtons = [...pauseMenu.querySelectorAll("button[data-menu]")];
+  const onPauseMenuClick = (event) => {
+    const menuAction = event.currentTarget.dataset.menu;
+    if (menuAction === "resume") {
+      setPauseState(false);
+      return;
+    }
+    onMenuAction?.(menuAction);
+  };
+  pauseMenuButtons.forEach((button) => button.addEventListener("click", onPauseMenuClick));
 
   function triggerInteraction() {
+    if (paused) return;
     if (!nearest || !onInteract) return;
     onInteract(nearest);
   }
@@ -698,10 +802,10 @@ export function mountCityWorld3d({ container, state, onInteract, onError, settin
   }
 
   function updateCamera(dt) {
-    const horizontal = Math.cos(pitch) * CAMERA_DISTANCE;
+    const horizontal = Math.cos(pitch) * cameraDistance;
     const desired = new THREE.Vector3(
       player.position.x - Math.sin(yaw) * horizontal,
-      CAMERA_HEIGHT + player.position.y + Math.sin(-pitch) * CAMERA_DISTANCE,
+      CAMERA_HEIGHT + player.position.y + Math.sin(-pitch) * cameraDistance,
       player.position.z - Math.cos(yaw) * horizontal
     );
 
@@ -727,6 +831,11 @@ export function mountCityWorld3d({ container, state, onInteract, onError, settin
     if (disposed) return;
     try {
       const dt = Math.min(0.05, clock.getDelta());
+      if (paused) {
+        renderer.render(scene, camera);
+        requestAnimationFrame(animate);
+        return;
+      }
 
       const padX = joystick.state.x;
       const padY = joystick.state.y;
@@ -801,10 +910,12 @@ export function mountCityWorld3d({ container, state, onInteract, onError, settin
       if (nearest) {
         const buttonPrompt = interiorType ? "Tap INTERACT" : "[E] or Tap INTERACT";
         promptNode.textContent = `${nearest.prompt} · ${buttonPrompt}`;
+        contextButton.textContent = nearest.interactionType === "door" ? "ENTER" : "ACTION";
       } else {
         const districtName = state.districts.find((d) => d.id === state.selectedDistrictId)?.name || "CITY";
         const locationName = LOCATIONS[state.currentLocationId]?.name || state.currentLocationId;
         promptNode.textContent = `${districtName} · ${locationName} · Explore and approach highlighted points`;
+        contextButton.textContent = "ACTION";
       }
 
       updateCamera(dt);
@@ -835,6 +946,14 @@ export function mountCityWorld3d({ container, state, onInteract, onError, settin
       runButton.removeEventListener("pointerdown", toggleSprintOn);
       runButton.removeEventListener("pointerup", toggleSprintOff);
       runButton.removeEventListener("pointercancel", toggleSprintOff);
+      actionButton.removeEventListener("click", onActionClick);
+      contextButton.removeEventListener("click", onContextClick);
+      pauseButton.removeEventListener("click", onPauseClick);
+      fullscreenButton.removeEventListener("click", onFullscreenClick);
+      zoomInButton.removeEventListener("click", onZoomInClick);
+      zoomOutButton.removeEventListener("click", onZoomOutClick);
+      renderer.domElement.removeEventListener("wheel", onWheelZoom);
+      pauseMenuButtons.forEach((button) => button.removeEventListener("click", onPauseMenuClick));
       joystick.destroy();
       look.destroy();
       renderer.dispose();

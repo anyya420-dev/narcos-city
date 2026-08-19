@@ -1259,7 +1259,10 @@ export const ACHIEVEMENTS = [
   { id: "ach-collection-3", name: "Property Holder", description: "Own a property.", category: "Collection", requirement: { type: "properties-owned", target: 1 }, reward: { cityReputation: 1 } },
   { id: "ach-casino-1", name: "First Bet", description: "Play 1 casino game.", category: "Money", requirement: { type: "casino-plays", target: 1 }, reward: { xp: 10 } },
   { id: "ach-casino-2", name: "Cold Streak", description: "Win 5 casino games.", category: "Money", requirement: { type: "casino-wins", target: 5 }, reward: { cash: 220 } },
-  { id: "ach-endurance", name: "Long Week", description: "Play 7 in-game days.", category: "Progression", requirement: { type: "days-played", target: 7 }, reward: { influence: 2 } }
+  { id: "ach-endurance", name: "Long Week", description: "Play 7 in-game days.", category: "Progression", requirement: { type: "days-played", target: 7 }, reward: { influence: 2 } },
+  { id: "ach-lifestyle-1", name: "After Hours", description: "Visit all 8 districts.", category: "Lifestyle", requirement: { type: "districts-visited", target: 8 }, reward: { xp: 34, cash: 180 } },
+  { id: "ach-economy-1", name: "Ledger Sharp", description: "Earn $25,000 lifetime.", category: "Economy", requirement: { type: "money-earned", target: 25000 }, reward: { xp: 28 } },
+  { id: "ach-operations-1", name: "Calculated Risk", description: "Reach street reputation 30.", category: "Operations", requirement: { type: "street-reputation", target: 30 }, reward: { streetReputation: 2 } }
 ];
 
 export const JOBS = [
@@ -1268,7 +1271,8 @@ export const JOBS = [
   { id: "job-mechanic", name: "Mechanic", minLevel: 3, energyCost: 11, timeCost: 1, income: 340, xp: 18, reputation: { business: 1 } },
   { id: "job-security", name: "Security", minLevel: 4, energyCost: 12, timeCost: 1, income: 410, xp: 20, reputation: { city: 1, faction: 1 } },
   { id: "job-bartender", name: "Bartender", minLevel: 2, energyCost: 9, timeCost: 1, income: 260, xp: 15, reputation: { city: 1 } },
-  { id: "job-office", name: "Office Worker", minLevel: 5, energyCost: 13, timeCost: 1, income: 500, xp: 24, reputation: { business: 2 } }
+  { id: "job-office", name: "Office Worker", minLevel: 5, energyCost: 13, timeCost: 1, income: 500, xp: 24, reputation: { business: 2 } },
+  { id: "job-hotel", name: "Hotel Worker", minLevel: 3, energyCost: 10, timeCost: 1, income: 320, xp: 17, reputation: { city: 1, business: 1 } }
 ];
 
 export const CRIME_OPERATIONS = [
