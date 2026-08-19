@@ -49,6 +49,17 @@ main {
   padding: 0.9rem;
   padding-bottom: 5rem;
   flex: 1;
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+main.screen-enter {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+main:not(.screen-enter) {
+  opacity: 0.7;
+  transform: translateY(5px);
 }
 
 .card {
@@ -91,6 +102,8 @@ main {
   display: block;
   color: var(--gold);
   margin-top: 0.18rem;
+  font-size: 0.95rem;
+  line-height: 1.25;
 }
 
 .bar {
@@ -124,6 +137,16 @@ button:disabled {
   flex-wrap: wrap;
   gap: 0.45rem;
   margin-top: 0.45rem;
+}
+
+ul {
+  margin: 0.35rem 0 0;
+  padding-left: 1rem;
+}
+
+li {
+  color: var(--silver);
+  margin-bottom: 0.2rem;
 }
 
 .bottom-nav {
