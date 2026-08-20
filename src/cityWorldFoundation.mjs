@@ -196,6 +196,7 @@ export function getSpawnPoint(state, model) {
 export function getInteractables(model) {
   const doors = model.buildings.map((entry) => ({
     id: entry.locationId,
+    locationId: entry.locationId,
     name: entry.name,
     districtId: entry.districtId,
     x: entry.door.x,
@@ -206,7 +207,12 @@ export function getInteractables(model) {
     locationType: entry.locationType
   }));
 
-  return [...doors, ...model.npcs, ...model.vehicles, ...model.districtMarkers];
+  const npcs = model.npcs.map((npc) => ({
+    ...npc,
+    npcId: npc.id
+  }));
+
+  return [...doors, ...npcs, ...model.vehicles, ...model.districtMarkers];
 }
 
 export function findNearestInteraction(player, interactables, maxDistance = 3.3) {

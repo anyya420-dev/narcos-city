@@ -451,46 +451,61 @@ function renderCity() {
         if (!target) return;
         if (state.settings?.soundEnabled) audio.interact();
 
-        if (target.interactionType === "interior-exit") {
+        const interactionType = target.interactionType;
+
+        if (interactionType === "interior-exit") {
           state.world.currentInteriorId = null;
           persist();
           render();
           return;
         }
 
-        if (target.interactionType === "district-marker") {
+        if (interactionType === "district-marker") {
           state.world.currentInteriorId = null;
-          travelToDistrict(state, target.id);
+          travelToDistrict(state, target.districtId || target.id);
+          persist();
+          render();
+          return;
         }
 
-        if (target.interactionType === "door") {
-          if (target.districtId !== state.selectedDistrictId) {
+        if (interactionType === "door") {
+          const districtId = target.districtId || state.selectedDistrictId;
+          const locationId = target.locationId || target.id;
+          if (target.districtId && target.districtId !== state.selectedDistrictId) {
             travelToDistrict(state, target.districtId);
           }
-          if ((target.districtId || state.selectedDistrictId) === state.selectedDistrictId) {
-            moveToLocation(state, target.districtId || state.selectedDistrictId, target.id);
-            state.world.currentInteriorId = target.enterable ? target.id : null;
+          if (districtId === state.selectedDistrictId && locationId) {
+            moveToLocation(state, districtId, locationId);
+            state.world.currentInteriorId = target.enterable ? locationId : null;
           }
+          persist();
+          render();
+          return;
         }
 
-        if (target.interactionType === "npc") {
+        if (interactionType === "npc") {
           state.world.currentInteriorId = null;
-          if (target.districtId !== state.selectedDistrictId) {
+          const districtId = target.districtId || state.selectedDistrictId;
+          const npcId = target.npcId || target.id;
+          if (target.districtId && target.districtId !== state.selectedDistrictId) {
             travelToDistrict(state, target.districtId);
           }
           if (
-            (target.districtId || state.selectedDistrictId) === state.selectedDistrictId &&
+            districtId === state.selectedDistrictId &&
             target.locationId &&
             state.currentLocationId !== target.locationId
           ) {
-            moveToLocation(state, target.districtId || state.selectedDistrictId, target.locationId);
+            moveToLocation(state, districtId, target.locationId);
           }
-          if ((target.districtId || state.selectedDistrictId) === state.selectedDistrictId) {
-            interactWithNpc(state, target.id, "talk");
+          if (districtId === state.selectedDistrictId && npcId) {
+            interactWithNpc(state, npcId, "talk");
           }
+          persist();
+          render();
+          return;
         }
 
-        if (target.interactionType === "vehicle") {
+        if (interactionType === "vehicle") {
           state.world.currentInteriorId = null;
           const owned = state.vehicles.find((entry) => entry.id === target.id)?.owned;
           if (owned) {
@@ -498,10 +513,13 @@ function renderCity() {
           } else {
             navigateTo(state, "inventory");
           }
+          persist();
+          render();
+          return;
         }
 
-        persist();
-        render();
+        // Unknown interaction type — log and do nothing (no Bank fallback)
+        console.warn("[onInteract] Unhandled interactionType:", interactionType, target);
       }
     });
   } catch (error) {

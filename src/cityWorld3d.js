@@ -835,6 +835,9 @@ export function mountCityWorld3d({ container, state, onInteract, onMenuAction, o
       console.debug(`[PAUSE] CONTINUE_CLICKED before=${paused}`);
       setPauseState(false, "resume-button");
       console.debug(`[PAUSE] CONTINUE_DONE after=${paused} hidden=${pauseMenu.hidden}`);
+      const stage = container.querySelector(".city-world-stage");
+      if (stage && stage.tabIndex < 0) stage.tabIndex = 0;
+      if (stage) stage.focus({ preventScroll: true });
       return;
     }
     onMenuAction?.(menuAction);
@@ -974,6 +977,7 @@ export function mountCityWorld3d({ container, state, onInteract, onMenuAction, o
         : [
             ...model.buildings.map((entry) => ({
               id: entry.locationId,
+              locationId: entry.locationId,
               name: entry.name,
               districtId: entry.districtId,
               x: entry.door.x,
@@ -985,6 +989,7 @@ export function mountCityWorld3d({ container, state, onInteract, onMenuAction, o
             })),
             ...npcs.map((npc) => ({
               id: npc.id,
+              npcId: npc.id,
               districtId: npc.districtId,
               locationId: npc.locationId,
               x: npc.mesh.position.x,
