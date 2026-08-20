@@ -845,6 +845,7 @@ export function mountCityWorld3d({ container, state, onInteract, onMenuAction, o
     if (!button || !pauseMenu.contains(button)) return;
     event.preventDefault();
     event.stopPropagation();
+    button._pauseHandled = true;
     runPauseMenuAction(button.dataset.menu);
   };
   const onPauseMenuClick = (event) => {
@@ -852,6 +853,7 @@ export function mountCityWorld3d({ container, state, onInteract, onMenuAction, o
     if (!button || !pauseMenu.contains(button)) return;
     event.preventDefault();
     event.stopPropagation();
+    if (button._pauseHandled) { button._pauseHandled = false; return; }
     if (button.dataset.menu === "resume" && !paused) return;
     runPauseMenuAction(button.dataset.menu);
   };
@@ -860,7 +862,20 @@ export function mountCityWorld3d({ container, state, onInteract, onMenuAction, o
 
   function triggerInteraction() {
     if (paused) return;
-    if (!nearest || !onInteract) return;
+    if (!nearest || !onInteract) {
+      // Flash "no nearby target" message in the interaction prompt
+      if (promptNode) {
+        const original = promptNode.textContent;
+        promptNode.textContent = t("prompt.noTarget", "Рядом нет объекта для взаимодействия.");
+        promptNode.classList.add("prompt-flash");
+        clearTimeout(promptNode._flashTimeout);
+        promptNode._flashTimeout = setTimeout(() => {
+          promptNode.textContent = original;
+          promptNode.classList.remove("prompt-flash");
+        }, 1800);
+      }
+      return;
+    }
     onInteract(nearest);
   }
 

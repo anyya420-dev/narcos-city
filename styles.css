@@ -642,3 +642,169 @@ select {
     height: 480px;
   }
 }
+
+/* ── Design System Enhancements ── */
+:root {
+  --black: #08080a;
+  --graphite: #191a1f;
+  --black-marble: #111216;
+  --muted-gold: #8b7355;
+  --deep-burgundy: #4a1a1a;
+  --dark-plum: #2a122a;
+  --silver: #aab0bd;
+  --premium-glow: rgba(200, 160, 100, 0.22);
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+}
+
+/* ── Prompt flash animation (no nearby target) ── */
+@keyframes prompt-flash-fade {
+  0% { opacity: 1; border-color: rgba(186, 73, 96, 0.75); color: #e07080; }
+  60% { opacity: 1; border-color: rgba(186, 73, 96, 0.65); }
+  100% { opacity: 0.78; border-color: rgba(181, 154, 95, 0.42); color: var(--gold); }
+}
+
+.interaction-prompt.prompt-flash {
+  animation: prompt-flash-fade 1.8s ease forwards;
+}
+
+/* ── Premium button hover/active states ── */
+button:hover:not(:disabled) {
+  border-color: rgba(181, 154, 95, 0.7);
+  background: linear-gradient(145deg, rgba(47, 28, 62, 0.95), rgba(90, 30, 50, 0.72));
+  cursor: pointer;
+}
+
+button:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+/* ── HUD improvements ── */
+.hud-corner {
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+/* ── Interaction prompt improvements ── */
+.interaction-prompt {
+  text-align: center;
+  letter-spacing: 0.04em;
+  font-size: 0.74rem;
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+  transition: border-color 0.3s ease, color 0.3s ease;
+}
+
+/* ── Pause menu polished ── */
+.pause-menu {
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(181, 154, 95, 0.38);
+  border-radius: var(--radius-lg);
+}
+
+.pause-menu h3 {
+  color: var(--gold);
+  letter-spacing: 0.16em;
+  font-size: 1rem;
+  margin-bottom: 0.7rem;
+}
+
+.pause-grid button {
+  font-size: 0.78rem;
+  letter-spacing: 0.06em;
+  padding: 0.62rem 0.5rem;
+}
+
+/* ── World button improvements ── */
+.world-button {
+  letter-spacing: 0.06em;
+  font-size: 0.72rem;
+  font-weight: 700;
+  border: 1px solid rgba(181, 154, 95, 0.55);
+  background: linear-gradient(160deg, rgba(22, 12, 28, 0.92), rgba(50, 18, 30, 0.82));
+  color: var(--ink);
+  border-radius: 10px;
+  min-height: 44px;
+  transition: border-color 0.18s ease, background 0.18s ease;
+}
+
+.world-button:active {
+  background: linear-gradient(160deg, rgba(40, 20, 50, 0.98), rgba(70, 24, 40, 0.88));
+  border-color: rgba(181, 154, 95, 0.85);
+  transform: scale(0.96);
+}
+
+/* ── Card improvements ── */
+.card {
+  border-radius: var(--radius-md);
+}
+
+/* ── Bottom nav improvements ── */
+.bottom-nav button {
+  letter-spacing: 0.05em;
+  font-size: 0.56rem;
+  font-weight: 700;
+  transition: color 0.16s ease, border-color 0.16s ease;
+}
+
+/* ── Main menu luxury feel ── */
+.menu-title {
+  color: var(--gold);
+  letter-spacing: 0.18em;
+}
+
+/* ── Settings screen improvements ── */
+.field select,
+.field input[type="range"] {
+  accent-color: var(--muted-gold);
+}
+
+/* ── City quick actions (shown in non-gameplay mode) ── */
+.city-quick-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  padding: 0.5rem;
+  justify-content: center;
+}
+
+/* ── Mobile: 44px minimum touch targets ── */
+@media (pointer: coarse) {
+  button {
+    min-height: 44px;
+  }
+
+  .bottom-nav button {
+    min-height: 44px;
+    padding: 0.55rem 0.2rem;
+  }
+}
+
+/* ── iPad / tablet layout ── */
+@media (min-width: 768px) and (max-width: 1024px) {
+  .city-world-stage {
+    height: 520px;
+  }
+
+  .pause-grid {
+    grid-template-columns: repeat(3, minmax(110px, 1fr));
+  }
+
+  .status-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+/* ── Desktop enhancements ── */
+@media (min-width: 1024px) {
+  .city-world-stage {
+    height: 600px;
+  }
+
+  .pause-grid {
+    grid-template-columns: repeat(4, minmax(110px, 1fr));
+  }
+}
+

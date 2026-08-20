@@ -40,7 +40,8 @@ const L = {
       explore: "Исследуйте город...",
       tapInteract: "Нажмите ВЗАИМОДЕЙСТВИЕ",
       keyboardInteract: "[E] или ВЗАИМОДЕЙСТВИЕ",
-      exploreHint: "Изучайте город и подходите к отмеченным точкам"
+      exploreHint: "Изучайте город и подходите к отмеченным точкам",
+      noTarget: "Рядом нет объекта для взаимодействия."
     },
     notices: {
       saved: "Прогресс сохранён.",
@@ -150,7 +151,8 @@ const L = {
       explore: "Explore the city...",
       tapInteract: "Tap INTERACT",
       keyboardInteract: "[E] or Tap INTERACT",
-      exploreHint: "Explore and approach highlighted points"
+      exploreHint: "Explore and approach highlighted points",
+      noTarget: "No nearby object to interact with."
     },
     notices: {
       saved: "Progress saved.",
@@ -269,7 +271,8 @@ export function cityWorldText(state) {
     "prompt.explore",
     "prompt.tapInteract",
     "prompt.keyboardInteract",
-    "prompt.exploreHint"
+    "prompt.exploreHint",
+    "prompt.noTarget"
   ];
   return Object.fromEntries(entries.map((key) => [key, t(state, key)]));
 }

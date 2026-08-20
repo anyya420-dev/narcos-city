@@ -211,24 +211,28 @@ function renderStatus() {
   const district = getSelectedDistrict(state);
   const location = getCurrentLocation(state);
   const totalRep = state.player.reputation.city + state.player.reputation.street + state.player.reputation.business + state.player.reputation.faction;
+  const isRu = getLanguage(state) === "ru";
+  const L = isRu
+    ? { name: "Имя", title: "Титул", level: "Уровень", xp: "Опыт", cash: "Нал / Банк", energy: "Энергия", needs: "Голод / Гигиена / Настроение", health: "Здоровье", respect: "Уважение / Влияние", status: "Статус", wanted: "Розыск", rep: "Репутация", district: "Район", location: "Локация", datetime: "Дата / Время", lifestyle: "Образ жизни / Статус" }
+    : { name: "Name", title: "Title", level: "Level", xp: "XP", cash: "Cash / Bank", energy: "Energy", needs: "Hunger / Hygiene / Mood", health: "Health", respect: "Respect / Influence", status: "Status", wanted: "Wanted", rep: "Rep Total", district: "District", location: "Location", datetime: "Date / Time", lifestyle: "Lifestyle / Status" };
   statusBar.innerHTML = `
     <div class="status-grid">
-      <div><span>Name</span><strong>${escapeHtml(state.player.name)}</strong></div>
-      <div><span>Title</span><strong>${escapeHtml(state.player.title)}</strong></div>
-      <div><span>Level</span><strong>${state.player.level}</strong></div>
-      <div><span>XP</span><strong>${state.player.xp}/${state.player.nextLevelXp}</strong></div>
-      <div><span>Cash / Bank</span><strong>${currency(state.player.money)} / ${currency(state.player.bankBalance)}</strong></div>
-      <div><span>Energy</span><strong>${state.player.energy}</strong></div>
-      <div><span>Hunger / Hygiene / Mood</span><strong>${Math.round(state.player.hunger || 0)} / ${Math.round(state.player.hygiene || 0)} / ${Math.round(state.player.mood || 0)}</strong></div>
-      <div><span>Health</span><strong>${state.player.health}</strong></div>
-      <div><span>Respect / Influence</span><strong>${state.player.respect || 0} / ${state.player.influence}</strong></div>
-      <div><span>Status</span><strong>${escapeHtml(state.player.status || "Active")}</strong></div>
-      <div><span>Wanted</span><strong>${state.player.wantedLevel}/5</strong></div>
-      <div><span>Rep Total</span><strong>${totalRep}</strong></div>
-      <div><span>District</span><strong>${escapeHtml(district.name)}</strong></div>
-      <div><span>Location</span><strong>${escapeHtml(location.name)}</strong></div>
-      <div><span>Date / Time</span><strong>Y${state.time.year} M${state.time.month} D${state.time.monthDay} · ${String(state.time.hour).padStart(2, "0")}:${String(state.time.minute).padStart(2, "0")}</strong></div>
-      <div><span>Lifestyle / Status</span><strong>${escapeHtml(state.life?.lifestyle || "Comfortable")} / ${escapeHtml(state.life?.socialStatus || "Unknown")}</strong></div>
+      <div><span>${L.name}</span><strong>${escapeHtml(state.player.name)}</strong></div>
+      <div><span>${L.title}</span><strong>${escapeHtml(state.player.title)}</strong></div>
+      <div><span>${L.level}</span><strong>${state.player.level}</strong></div>
+      <div><span>${L.xp}</span><strong>${state.player.xp}/${state.player.nextLevelXp}</strong></div>
+      <div><span>${L.cash}</span><strong>${currency(state.player.money)} / ${currency(state.player.bankBalance)}</strong></div>
+      <div><span>${L.energy}</span><strong>${state.player.energy}</strong></div>
+      <div><span>${L.needs}</span><strong>${Math.round(state.player.hunger || 0)} / ${Math.round(state.player.hygiene || 0)} / ${Math.round(state.player.mood || 0)}</strong></div>
+      <div><span>${L.health}</span><strong>${state.player.health}</strong></div>
+      <div><span>${L.respect}</span><strong>${state.player.respect || 0} / ${state.player.influence}</strong></div>
+      <div><span>${L.status}</span><strong>${escapeHtml(state.player.status || (isRu ? "Активен" : "Active"))}</strong></div>
+      <div><span>${L.wanted}</span><strong>${state.player.wantedLevel}/5</strong></div>
+      <div><span>${L.rep}</span><strong>${totalRep}</strong></div>
+      <div><span>${L.district}</span><strong>${escapeHtml(district.name)}</strong></div>
+      <div><span>${L.location}</span><strong>${escapeHtml(location.name)}</strong></div>
+      <div><span>${L.datetime}</span><strong>Y${state.time.year} M${state.time.month} D${state.time.monthDay} · ${String(state.time.hour).padStart(2, "0")}:${String(state.time.minute).padStart(2, "0")}</strong></div>
+      <div><span>${L.lifestyle}</span><strong>${escapeHtml(state.life?.lifestyle || (isRu ? "Комфортный" : "Comfortable"))} / ${escapeHtml(state.life?.socialStatus || (isRu ? "Неизвестно" : "Unknown"))}</strong></div>
     </div>
     ${runtimeNotice ? `<p class="badge alert">${escapeHtml(runtimeNotice)}</p>` : ""}
   `;
@@ -517,6 +521,7 @@ function renderDistricts() {
     cityWorldSession = null;
   }
   const currentVehicle = state.vehicles.find((entry) => entry.id === state.player.currentVehicleId);
+  const isRu = getLanguage(state) === "ru";
   const cards = DISTRICTS.map((district) => {
     const selected = district.id === state.selectedDistrictId ? " active-location" : "";
     const travelCost = Math.max(40, district.travelCost + (currentVehicle?.travelCost || 60) - 80);
@@ -526,14 +531,14 @@ function renderDistricts() {
         <h3>${escapeHtml(district.name)}</h3>
         <p class="muted">${escapeHtml(district.description)}</p>
         <div class="grid-2">
-          <div class="stat">Reputation Req<strong>${district.reputationRequirement}</strong></div>
-          <div class="stat">Travel Cost<strong>${currency(travelCost)}</strong></div>
-          <div class="stat">Travel Time<strong>${district.travelTime}</strong></div>
-          <div class="stat">Danger/Wealth<strong>${district.dangerLevel}/${district.wealthLevel}</strong></div>
+          <div class="stat">${isRu ? "Требование репутации" : "Reputation Req"}<strong>${district.reputationRequirement}</strong></div>
+          <div class="stat">${isRu ? "Стоимость поездки" : "Travel Cost"}<strong>${currency(travelCost)}</strong></div>
+          <div class="stat">${isRu ? "Время поездки" : "Travel Time"}<strong>${district.travelTime}</strong></div>
+          <div class="stat">${isRu ? "Опасность/Богатство" : "Danger/Wealth"}<strong>${district.dangerLevel}/${district.wealthLevel}</strong></div>
         </div>
         <div class="actions">
-          <button data-action="travel" data-district-id="${district.id}" ${locked ? "disabled" : ""}>Travel</button>
-          <button data-action="cool-heat" data-district-id="${district.id}">Reduce Wanted</button>
+          <button data-action="travel" data-district-id="${district.id}" ${locked ? "disabled" : ""}>${isRu ? "Поехать" : "Travel"}</button>
+          <button data-action="cool-heat" data-district-id="${district.id}">${isRu ? "Снизить розыск" : "Reduce Wanted"}</button>
         </div>
       </article>
     `;
@@ -541,8 +546,8 @@ function renderDistricts() {
 
   root.innerHTML = `
     <section class="card marble">
-      <h2>District Network</h2>
-      <p class="muted">Travel reshapes reputation, risk, and opportunities.</p>
+      <h2>${isRu ? "Районы города" : "District Network"}</h2>
+      <p class="muted">${isRu ? "Путешествия меняют репутацию, риски и возможности." : "Travel reshapes reputation, risk, and opportunities."}</p>
     </section>
     ${renderDistrictMap()}
     ${cards}
@@ -557,79 +562,113 @@ function renderProfile() {
   const rep = state.player.reputation;
   const titleIndex = TITLE_RANKS.findIndex((rank) => rank.name === state.player.title);
   const life = state.life || {};
+  const isRu = getLanguage(state) === "ru";
+  const PL = isRu ? {
+    title: "Профиль", rank: "Ранг",
+    level: "Уровень", influence: "Влияние", health: "Здоровье", energy: "Энергия",
+    hunger: "Голод", hygiene: "Гигиена", mood: "Настроение", strength: "Сила",
+    intelligence: "Интеллект", charisma: "Харизма", wanted: "Розыск",
+    lifeCore: "Жизнь", age: "Возраст", birthday: "День рождения",
+    occupation: "Занятие", career: "Карьера", education: "Образование",
+    residence: "Жильё", relationship: "Отношения", lifestyle: "Образ жизни / Статус",
+    reputation: "Репутация", city: "Город", street: "Улица", business: "Бизнес", faction: "Фракция",
+    topRelationships: "Топ отношений", statistics: "Статистика",
+    districtsVisited: "Районов посещено", locationsVisited: "Локаций посещено",
+    moneyEarned: "Заработано", moneySpent: "Потрачено", questsCompleted: "Квестов выполнено",
+    npcsMet: "NPC встречено", businessesOwned: "Бизнесов", propertiesOwned: "Собственности",
+    vehiclesOwned: "Транспорт", casinoWL: "Казино W/L", travelCount: "Путешествий",
+    achievements: "Достижений",
+    unemployed: "Безработный", single: "Свободен", none: "Нет", school: "Школа", entry: "Начальный"
+  } : {
+    title: "Profile", rank: "Rank",
+    level: "Level", influence: "Influence", health: "Health", energy: "Energy",
+    hunger: "Hunger", hygiene: "Hygiene", mood: "Mood", strength: "Strength",
+    intelligence: "Intelligence", charisma: "Charisma", wanted: "Wanted",
+    lifeCore: "Life Core", age: "Age", birthday: "Birthday",
+    occupation: "Occupation", career: "Career", education: "Education",
+    residence: "Residence", relationship: "Relationship", lifestyle: "Lifestyle / Social",
+    reputation: "Reputation", city: "City", street: "Street", business: "Business", faction: "Faction",
+    topRelationships: "Top Relationships", statistics: "Lifetime Statistics",
+    districtsVisited: "Districts Visited", locationsVisited: "Locations Visited",
+    moneyEarned: "Money Earned", moneySpent: "Money Spent", questsCompleted: "Quests Completed",
+    npcsMet: "NPCs Met", businessesOwned: "Businesses Owned", propertiesOwned: "Properties Owned",
+    vehiclesOwned: "Vehicles Owned", casinoWL: "Casino W/L", travelCount: "Travel Count",
+    achievements: "Achievements",
+    unemployed: "Unemployed", single: "Single", none: "None", school: "School", entry: "Entry"
+  };
 
   root.innerHTML = `
     <section class="card marble">
-      <h2>Profile</h2>
-      <p class="muted">${escapeHtml(state.player.name)} · ${escapeHtml(state.player.title)} (Rank ${titleIndex + 1}/${TITLE_RANKS.length})</p>
+      <h2>${PL.title}</h2>
+      <p class="muted">${escapeHtml(state.player.name)} · ${escapeHtml(state.player.title)} (${PL.rank} ${titleIndex + 1}/${TITLE_RANKS.length})</p>
       <div class="grid-2">
-        <div class="stat">Level<strong>${state.player.level}</strong>${progressBar(state.player.xp, state.player.nextLevelXp)}</div>
-        <div class="stat">Influence<strong>${state.player.influence}</strong>${progressBar(state.player.influence, 100)}</div>
-        <div class="stat">Health<strong>${state.player.health}</strong>${progressBar(state.player.health)}</div>
-        <div class="stat">Energy<strong>${state.player.energy}</strong>${progressBar(state.player.energy)}</div>
-        <div class="stat">Hunger<strong>${Math.round(state.player.hunger || 0)}</strong>${progressBar(state.player.hunger || 0)}</div>
-        <div class="stat">Hygiene<strong>${Math.round(state.player.hygiene || 0)}</strong>${progressBar(state.player.hygiene || 0)}</div>
-        <div class="stat">Mood<strong>${Math.round(state.player.mood || 0)}</strong>${progressBar(state.player.mood || 0)}</div>
-        <div class="stat">Strength<strong>${state.player.strength}</strong></div>
-        <div class="stat">Intelligence<strong>${state.player.intelligence}</strong></div>
-        <div class="stat">Charisma<strong>${state.player.charisma}</strong></div>
-        <div class="stat">Wanted<strong>${state.player.wantedLevel}/5</strong>${progressBar(state.player.wantedLevel, 5)}</div>
+        <div class="stat">${PL.level}<strong>${state.player.level}</strong>${progressBar(state.player.xp, state.player.nextLevelXp)}</div>
+        <div class="stat">${PL.influence}<strong>${state.player.influence}</strong>${progressBar(state.player.influence, 100)}</div>
+        <div class="stat">${PL.health}<strong>${state.player.health}</strong>${progressBar(state.player.health)}</div>
+        <div class="stat">${PL.energy}<strong>${state.player.energy}</strong>${progressBar(state.player.energy)}</div>
+        <div class="stat">${PL.hunger}<strong>${Math.round(state.player.hunger || 0)}</strong>${progressBar(state.player.hunger || 0)}</div>
+        <div class="stat">${PL.hygiene}<strong>${Math.round(state.player.hygiene || 0)}</strong>${progressBar(state.player.hygiene || 0)}</div>
+        <div class="stat">${PL.mood}<strong>${Math.round(state.player.mood || 0)}</strong>${progressBar(state.player.mood || 0)}</div>
+        <div class="stat">${PL.strength}<strong>${state.player.strength}</strong></div>
+        <div class="stat">${PL.intelligence}<strong>${state.player.intelligence}</strong></div>
+        <div class="stat">${PL.charisma}<strong>${state.player.charisma}</strong></div>
+        <div class="stat">${PL.wanted}<strong>${state.player.wantedLevel}/5</strong>${progressBar(state.player.wantedLevel, 5)}</div>
       </div>
     </section>
     <section class="card">
-      <h3>Life Core</h3>
+      <h3>${PL.lifeCore}</h3>
       <div class="grid-2">
-        <div class="stat">Age<strong>${life.age || 0}</strong></div>
-        <div class="stat">Birthday<strong>${life.birthday ? `${life.birthday.day}/${life.birthday.month}` : "—"}</strong></div>
-        <div class="stat">Occupation<strong>${escapeHtml(life.occupation || "Unemployed")}</strong></div>
-        <div class="stat">Career<strong>${escapeHtml(life.career?.level || "Entry")} · XP ${life.career?.xp || 0}</strong></div>
-        <div class="stat">Education<strong>${escapeHtml(life.education?.level || "School")} · ${life.education?.points || 0} pts</strong></div>
-        <div class="stat">Residence<strong>${escapeHtml(life.residence?.type || "None")} (${escapeHtml(life.residence?.ownership || "None")})</strong></div>
-        <div class="stat">Relationship<strong>${escapeHtml(life.relationshipStatus || "Single")}</strong></div>
-        <div class="stat">Lifestyle / Social<strong>${escapeHtml(life.lifestyle || "Comfortable")} / ${escapeHtml(life.socialStatus || "Unknown")}</strong></div>
+        <div class="stat">${PL.age}<strong>${life.age || 0}</strong></div>
+        <div class="stat">${PL.birthday}<strong>${life.birthday ? `${life.birthday.day}/${life.birthday.month}` : "—"}</strong></div>
+        <div class="stat">${PL.occupation}<strong>${escapeHtml(life.occupation || PL.unemployed)}</strong></div>
+        <div class="stat">${PL.career}<strong>${escapeHtml(life.career?.level || PL.entry)} · XP ${life.career?.xp || 0}</strong></div>
+        <div class="stat">${PL.education}<strong>${escapeHtml(life.education?.level || PL.school)} · ${life.education?.points || 0} pts</strong></div>
+        <div class="stat">${PL.residence}<strong>${escapeHtml(life.residence?.type || PL.none)} (${escapeHtml(life.residence?.ownership || PL.none)})</strong></div>
+        <div class="stat">${PL.relationship}<strong>${escapeHtml(life.relationshipStatus || PL.single)}</strong></div>
+        <div class="stat">${PL.lifestyle}<strong>${escapeHtml(life.lifestyle || (isRu ? "Комфортный" : "Comfortable"))} / ${escapeHtml(life.socialStatus || (isRu ? "Неизвестно" : "Unknown"))}</strong></div>
       </div>
     </section>
     <section class="card">
-      <h3>Reputation</h3>
+      <h3>${PL.reputation}</h3>
       <div class="grid-2">
-        <div class="stat">City<strong>${rep.city}</strong>${progressBar(rep.city, 60)}</div>
-        <div class="stat">Street<strong>${rep.street}</strong>${progressBar(rep.street, 60)}</div>
-        <div class="stat">Business<strong>${rep.business}</strong>${progressBar(rep.business, 60)}</div>
-        <div class="stat">Faction<strong>${rep.faction}</strong>${progressBar(rep.faction, 60)}</div>
+        <div class="stat">${PL.city}<strong>${rep.city}</strong>${progressBar(rep.city, 60)}</div>
+        <div class="stat">${PL.street}<strong>${rep.street}</strong>${progressBar(rep.street, 60)}</div>
+        <div class="stat">${PL.business}<strong>${rep.business}</strong>${progressBar(rep.business, 60)}</div>
+        <div class="stat">${PL.faction}<strong>${rep.faction}</strong>${progressBar(rep.faction, 60)}</div>
       </div>
     </section>
     <section class="card">
-      <h3>${t(state, "stage4.status", "Stage 4 Status")}</h3>
+      <h3>${t(state, "stage4.status", isRu ? "Состояние империи" : "Empire Status")}</h3>
       <div class="grid-2">
-        <div class="stat">${t(state, "stage4.wealth", "Wealth")}<strong>${currency(state.economy?.netWorth || 0)}</strong></div>
-        <div class="stat">${t(state, "stage4.businessPortfolio", "Business Portfolio")}<strong>${state.player.ownedBusinesses.length}</strong></div>
-        <div class="stat">Street / City Rep<strong>${rep.street}/${rep.city}</strong></div>
-        <div class="stat">${t(state, "stage4.gangRank", "Gang Rank")}<strong>${escapeHtml(state.gang?.rank || "Recruit")}</strong></div>
-        <div class="stat">Influence<strong>${state.player.influence}</strong></div>
-        <div class="stat">Wanted Status<strong>${state.player.wantedLevel}/5</strong></div>
-        <div class="stat">Lifestyle<strong>${escapeHtml(state.life?.lifestyle || "Comfortable")}</strong></div>
-        <div class="stat">${t(state, "stage4.familyWealth", "Family Wealth")}<strong>${currency(state.family?.legacy?.wealth || 0)}</strong></div>
+        <div class="stat">${t(state, "stage4.wealth", isRu ? "Состояние" : "Wealth")}<strong>${currency(state.economy?.netWorth || 0)}</strong></div>
+        <div class="stat">${t(state, "stage4.businessPortfolio", isRu ? "Портфель бизнесов" : "Business Portfolio")}<strong>${state.player.ownedBusinesses.length}</strong></div>
+        <div class="stat">${isRu ? "Репутация улица/город" : "Street / City Rep"}<strong>${rep.street}/${rep.city}</strong></div>
+        <div class="stat">${t(state, "stage4.gangRank", isRu ? "Ранг в группировке" : "Gang Rank")}<strong>${escapeHtml(state.gang?.rank || (isRu ? "Новобранец" : "Recruit"))}</strong></div>
+        <div class="stat">${PL.influence}<strong>${state.player.influence}</strong></div>
+        <div class="stat">${isRu ? "Статус розыска" : "Wanted Status"}<strong>${state.player.wantedLevel}/5</strong></div>
+        <div class="stat">${isRu ? "Образ жизни" : "Lifestyle"}<strong>${escapeHtml(state.life?.lifestyle || (isRu ? "Комфортный" : "Comfortable"))}</strong></div>
+        <div class="stat">${t(state, "stage4.familyWealth", isRu ? "Богатство семьи" : "Family Wealth")}<strong>${currency(state.family?.legacy?.wealth || 0)}</strong></div>
       </div>
     </section>
     <section class="card">
-      <h3>Top Relationships</h3>
+      <h3>${PL.topRelationships}</h3>
       <div class="grid-2">${relationshipSnippet()}</div>
     </section>
     <section class="card">
-      <h3>Lifetime Statistics</h3>
+      <h3>${PL.statistics}</h3>
       <div class="grid-2">
-        <div class="stat">Districts Visited<strong>${state.statistics.districtsVisited.length}</strong></div>
-        <div class="stat">Locations Visited<strong>${state.statistics.locationsVisited.length}</strong></div>
-        <div class="stat">Money Earned<strong>${currency(state.statistics.moneyEarned)}</strong></div>
-        <div class="stat">Money Spent<strong>${currency(state.statistics.moneySpent)}</strong></div>
-        <div class="stat">Quests Completed<strong>${state.statistics.questsCompleted}</strong></div>
-        <div class="stat">NPCs Met<strong>${state.statistics.npcsMet.length}</strong></div>
-        <div class="stat">Businesses Owned<strong>${state.player.ownedBusinesses.length}</strong></div>
-        <div class="stat">Properties Owned<strong>${state.player.ownedProperties.length}</strong></div>
-        <div class="stat">Vehicles Owned<strong>${state.vehicles.filter((v) => v.owned).length}</strong></div>
-        <div class="stat">Casino W/L<strong>${state.statistics.casinoWins}/${state.statistics.casinoLosses}</strong></div>
-        <div class="stat">Travel Count<strong>${state.statistics.travelCount}</strong></div>
-        <div class="stat">Achievements<strong>${state.statistics.achievementsUnlocked}</strong></div>
+        <div class="stat">${PL.districtsVisited}<strong>${state.statistics.districtsVisited.length}</strong></div>
+        <div class="stat">${PL.locationsVisited}<strong>${state.statistics.locationsVisited.length}</strong></div>
+        <div class="stat">${PL.moneyEarned}<strong>${currency(state.statistics.moneyEarned)}</strong></div>
+        <div class="stat">${PL.moneySpent}<strong>${currency(state.statistics.moneySpent)}</strong></div>
+        <div class="stat">${PL.questsCompleted}<strong>${state.statistics.questsCompleted}</strong></div>
+        <div class="stat">${PL.npcsMet}<strong>${state.statistics.npcsMet.length}</strong></div>
+        <div class="stat">${PL.businessesOwned}<strong>${state.player.ownedBusinesses.length}</strong></div>
+        <div class="stat">${PL.propertiesOwned}<strong>${state.player.ownedProperties.length}</strong></div>
+        <div class="stat">${PL.vehiclesOwned}<strong>${state.vehicles.filter((v) => v.owned).length}</strong></div>
+        <div class="stat">${PL.casinoWL}<strong>${state.statistics.casinoWins}/${state.statistics.casinoLosses}</strong></div>
+        <div class="stat">${PL.travelCount}<strong>${state.statistics.travelCount}</strong></div>
+        <div class="stat">${PL.achievements}<strong>${state.statistics.achievementsUnlocked}</strong></div>
       </div>
     </section>
   `;
