@@ -105,6 +105,12 @@ try {
   // Ignore.
 }
 state.settings.language = ["ru", "en"].includes(state.settings.language) ? state.settings.language : DEFAULT_LANGUAGE;
+state.settings.soundEnabled = state.settings.soundEnabled !== false;
+state.settings.musicEnabled = state.settings.musicEnabled !== false;
+state.settings.muted = Boolean(state.settings.muted);
+state.settings.sfxVolume = Number.isFinite(state.settings.sfxVolume) ? Math.max(0, Math.min(1, state.settings.sfxVolume)) : 0.7;
+state.settings.musicVolume = Number.isFinite(state.settings.musicVolume) ? Math.max(0, Math.min(1, state.settings.musicVolume)) : 0.5;
+state.settings.ambientVolume = Number.isFinite(state.settings.ambientVolume) ? Math.max(0, Math.min(1, state.settings.ambientVolume)) : 0.55;
 const root = document.getElementById("screen-root");
 const nav = document.getElementById("bottom-nav");
 const statusBar = document.getElementById("status-bar");
@@ -118,6 +124,17 @@ function setGameplayMode(active) {
   document.body.classList.toggle("gameplay-mode", !!active);
   document.body.classList.toggle("no-page-scroll", !!active);
 }
+
+function syncAudioSettings() {
+  audio.applySettings({
+    muted: !!state.settings.muted || state.settings.soundEnabled === false,
+    sfxVolume: state.settings.sfxVolume,
+    musicVolume: state.settings.musicEnabled === false ? 0 : state.settings.musicVolume,
+    ambientVolume: state.settings.ambientVolume
+  });
+}
+
+syncAudioSettings();
 
 function applyLocalizedShell() {
   const lang = getLanguage(state);
@@ -185,7 +202,7 @@ function relationshipSnippet() {
 function renderStatus() {
   if (!state.meta.hasCreatedCharacter) {
     statusBar.innerHTML = `
-      <p class="muted">Create your character and enter NARCOS CITY.</p>
+      <p class="muted">${t(state, "notices.setupHint", "Create your character and enter NARCOS CITY.")}</p>
       ${runtimeNotice ? `<p class="badge alert">${escapeHtml(runtimeNotice)}</p>` : ""}
     `;
     return;
@@ -303,10 +320,20 @@ function renderSettings() {
         <input id="setting-camera" type="range" min="0.6" max="1.8" step="0.05" value="${s.cameraSensitivity || 1}" />
       </label>
       <div class="actions">
-        <button data-action="toggle-sound">${isRu ? "Звук" : "Sound"}: ${s.soundEnabled ? t(state, "common.on", "ON") : t(state, "common.off", "OFF")}</button>
-        <button data-action="toggle-music">${isRu ? "Музыка" : "Music"}: ${s.musicEnabled ? t(state, "common.on", "ON") : t(state, "common.off", "OFF")}</button>
+        <button data-action="toggle-sound">${t(state, "settings.sound", "Sound")}: ${s.soundEnabled ? t(state, "common.on", "ON") : t(state, "common.off", "OFF")}</button>
+        <button data-action="toggle-music">${t(state, "settings.music", "Music")}: ${s.musicEnabled ? t(state, "common.on", "ON") : t(state, "common.off", "OFF")}</button>
+        <button data-action="toggle-mute">${t(state, "settings.mute", "Mute")}: ${s.muted ? t(state, "common.on", "ON") : t(state, "common.off", "OFF")}</button>
         <button data-action="save-settings">${t(state, "settings.save", "Save Settings")}</button>
       </div>
+      <label class="field"><span>${t(state, "settings.sfxVolume", "SFX Volume")} (${Math.round((s.sfxVolume ?? 0.7) * 100)}%)</span>
+        <input id="setting-sfx-volume" type="range" min="0" max="1" step="0.05" value="${s.sfxVolume ?? 0.7}" />
+      </label>
+      <label class="field"><span>${t(state, "settings.musicVolume", "Music Volume")} (${Math.round((s.musicVolume ?? 0.5) * 100)}%)</span>
+        <input id="setting-music-volume" type="range" min="0" max="1" step="0.05" value="${s.musicVolume ?? 0.5}" />
+      </label>
+      <label class="field"><span>${t(state, "settings.ambientVolume", "Ambient Volume")} (${Math.round((s.ambientVolume ?? 0.55) * 100)}%)</span>
+        <input id="setting-ambient-volume" type="range" min="0" max="1" step="0.05" value="${s.ambientVolume ?? 0.55}" />
+      </label>
     </section>
   `;
 }
@@ -325,7 +352,7 @@ function renderDistrictMap() {
     })
     .join("");
   return `<section class="card">
-    <h3>City Map</h3>
+    <h3>${t(state, "nav.map", "MAP")}</h3>
     <div class="district-map">${entries}</div>
   </section>`;
 }
@@ -406,6 +433,8 @@ function renderCity() {
         if (menuAction === "quests") navigateTo(state, "quests");
         if (menuAction === "inventory") navigateTo(state, "inventory");
         if (menuAction === "profile") navigateTo(state, "profile");
+        if (menuAction === "family") navigateTo(state, "family");
+        if (menuAction === "business" || menuAction === "vehicles") navigateTo(state, "inventory");
         if (menuAction === "settings") navigateTo(state, "settings");
         if (menuAction === "save") setRuntimeNotice(t(state, "notices.saved", "Progress saved."));
         if (menuAction === "main-menu") navigateTo(state, "main-menu");
@@ -1298,15 +1327,23 @@ root.addEventListener("click", (event) => {
 
     if (action === "toggle-sound") state.settings.soundEnabled = !state.settings.soundEnabled;
     if (action === "toggle-music") state.settings.musicEnabled = !state.settings.musicEnabled;
+    if (action === "toggle-mute") state.settings.muted = !state.settings.muted;
     if (action === "save-settings") {
       const controlsSensitivity = Number(document.getElementById("setting-controls")?.value || state.settings.controlsSensitivity || 1);
       const cameraSensitivity = Number(document.getElementById("setting-camera")?.value || state.settings.cameraSensitivity || 1);
       const graphicsQuality = document.getElementById("setting-graphics")?.value || state.settings.graphicsQuality || "medium";
       const language = document.getElementById("setting-language")?.value || state.settings.language || DEFAULT_LANGUAGE;
+      const sfxVolume = Number(document.getElementById("setting-sfx-volume")?.value ?? state.settings.sfxVolume ?? 0.7);
+      const musicVolume = Number(document.getElementById("setting-music-volume")?.value ?? state.settings.musicVolume ?? 0.5);
+      const ambientVolume = Number(document.getElementById("setting-ambient-volume")?.value ?? state.settings.ambientVolume ?? 0.55);
       state.settings.controlsSensitivity = Math.max(0.6, Math.min(1.8, controlsSensitivity));
       state.settings.cameraSensitivity = Math.max(0.6, Math.min(1.8, cameraSensitivity));
       state.settings.graphicsQuality = ["low", "medium", "high"].includes(graphicsQuality) ? graphicsQuality : "medium";
       state.settings.language = ["ru", "en"].includes(language) ? language : DEFAULT_LANGUAGE;
+      state.settings.sfxVolume = Math.max(0, Math.min(1, Number.isFinite(sfxVolume) ? sfxVolume : 0.7));
+      state.settings.musicVolume = Math.max(0, Math.min(1, Number.isFinite(musicVolume) ? musicVolume : 0.5));
+      state.settings.ambientVolume = Math.max(0, Math.min(1, Number.isFinite(ambientVolume) ? ambientVolume : 0.55));
+      syncAudioSettings();
       setRuntimeNotice("");
       persist();
       render();
@@ -1388,12 +1425,14 @@ root.addEventListener("click", (event) => {
     if (action === "debug-property") debugAddProperty(state, "apt-oldtown");
 
     if (action === "reset-game") {
-      if (window.confirm("Reset all progress?")) {
+      if (window.confirm(t(state, "notices.resetConfirm", "Reset all progress?"))) {
         state = resetGame();
         localStorage.removeItem(STORAGE_KEY);
+        syncAudioSettings();
       }
     }
 
+    syncAudioSettings();
     setRuntimeNotice("");
     persist();
     render();
@@ -1409,6 +1448,11 @@ if (localStorage.getItem("narcos-city-debug") === "1") {
 }
 
 render();
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("./sw.js").catch(() => {});
+  });
+}
 window.setTimeout(() => {
   loading = false;
   if (!startedFromMenu) {

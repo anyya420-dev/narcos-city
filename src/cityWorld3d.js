@@ -521,6 +521,9 @@ export function mountCityWorld3d({ container, state, onInteract, onMenuAction, o
             <button data-menu="quests" type="button">${t("pause.quests", "Quests")}</button>
             <button data-menu="inventory" type="button">${t("pause.inventory", "Inventory")}</button>
             <button data-menu="profile" type="button">${t("pause.profile", "Profile")}</button>
+            <button data-menu="family" type="button">${t("pause.family", "Family")}</button>
+            <button data-menu="business" type="button">${t("pause.business", "Business")}</button>
+            <button data-menu="vehicles" type="button">${t("pause.vehicles", "Vehicles")}</button>
             <button data-menu="settings" type="button">${t("pause.settings", "Settings")}</button>
             <button data-menu="save" type="button">${t("pause.save", "Save")}</button>
             <button data-menu="main-menu" type="button">${t("pause.exit", "Exit Menu")}</button>

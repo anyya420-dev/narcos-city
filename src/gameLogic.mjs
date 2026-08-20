@@ -2080,6 +2080,10 @@ export function createInitialState() {
     settings: {
       soundEnabled: true,
       musicEnabled: true,
+      muted: false,
+      sfxVolume: 0.7,
+      musicVolume: 0.5,
+      ambientVolume: 0.55,
       graphicsQuality: "medium",
       controlsSensitivity: 1,
       cameraSensitivity: 1,
@@ -2209,6 +2213,12 @@ function migrateState(rawState) {
   merged.player.wantedLevel = clamp(merged.player.wantedLevel || merged.meta.wantedLevel || 0, 0, BALANCE.wanted.maxLevel);
   merged.meta.saveVersion = SAVE_VERSION;
   merged.settings.language = ["ru", "en"].includes(merged.settings.language) ? merged.settings.language : "ru";
+  merged.settings.soundEnabled = merged.settings.soundEnabled !== false;
+  merged.settings.musicEnabled = merged.settings.musicEnabled !== false;
+  merged.settings.muted = Boolean(merged.settings.muted);
+  merged.settings.sfxVolume = clamp(Number.isFinite(merged.settings.sfxVolume) ? merged.settings.sfxVolume : 0.7, 0, 1);
+  merged.settings.musicVolume = clamp(Number.isFinite(merged.settings.musicVolume) ? merged.settings.musicVolume : 0.5, 0, 1);
+  merged.settings.ambientVolume = clamp(Number.isFinite(merged.settings.ambientVolume) ? merged.settings.ambientVolume : 0.55, 0, 1);
   merged.credit.creditLimit = Math.max(BALANCE.credit.maxCreditByLevel, stateCreditLimitForLevel(merged.player.level));
   ensureLifeState(merged);
   ensureFamilyState(merged);
