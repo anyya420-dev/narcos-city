@@ -39,6 +39,18 @@ const LIFESTYLE_LEVELS = ["Poor", "Comfortable", "Wealthy", "Luxury", "Elite"];
 const SOCIAL_STATUS_LEVELS = ["Unknown", "Local", "Recognized", "Influential", "Elite", "VIP", "Legendary"];
 const CAREER_LEVELS = ["Entry", "Junior", "Experienced", "Senior", "Manager", "Executive"];
 const OUTFIT_PRESETS = ["Casual", "Elegant", "Luxury", "Street", "Business", "Nightlife", "Sport"];
+const GANG_RANKS = ["Recruit", "Member", "Enforcer", "Lieutenant", "Captain", "Boss", "Leader"];
+const CASINO_VIP_LEVELS = ["Regular", "Silver", "Gold", "Platinum", "Diamond"];
+const EMPLOYEE_ROLES = ["Manager", "Cashier", "Bartender", "Chef", "Driver", "Security", "Receptionist", "Assistant"];
+const CONTACT_SERVICES_BY_ROLE = {
+  fixer: ["Underground Deal", "Mission Lead"],
+  mechanic: ["Vehicle Repair", "Vehicle Upgrade"],
+  banker: ["Bank Services", "Credit Advice"],
+  investor: ["Business Funding", "Luxury Access"],
+  "property manager": ["Property Listing", "Rent Negotiation"],
+  "security boss": ["Protection Mission", "Security Upgrade"],
+  "street trader": ["Black Market Event", "Rare Items"]
+};
 const FAMILY_LIFE_STAGES = [
   { id: "Baby", min: 0, max: 1 },
   { id: "Toddler", min: 2, max: 4 },
@@ -84,6 +96,61 @@ function getItemCategory(itemId) {
 
 function relationshipStatus(value) {
   return RELATIONSHIP_STATUSES.find((entry) => value >= entry.min && value <= entry.max)?.label ?? "Stranger";
+}
+
+function createBusinessEmployee(seed = "employee") {
+  const role = EMPLOYEE_ROLES[Math.floor(Math.random() * EMPLOYEE_ROLES.length)];
+  return {
+    id: makeId("employee"),
+    name: `${seed}-${Math.random().toString(36).slice(2, 6)}`,
+    role,
+    salary: 140 + Math.floor(Math.random() * 120),
+    skill: 45 + Math.floor(Math.random() * 35),
+    morale: 55 + Math.floor(Math.random() * 30),
+    reliability: 50 + Math.floor(Math.random() * 35)
+  };
+}
+
+function createContactsState() {
+  return Object.fromEntries(
+    NPCS.map((npc) => {
+      const services = CONTACT_SERVICES_BY_ROLE[npc.role] || ["Information", "Networking"];
+      return [
+        npc.id,
+        {
+          id: npc.id,
+          name: npc.name,
+          role: npc.role,
+          district: npc.district,
+          trust: 0,
+          influence: 1,
+          services
+        }
+      ];
+    })
+  );
+}
+
+function createTerritoryState() {
+  return DISTRICTS.map((district, index) => {
+    const ownerFactionId = FACTIONS[index % FACTIONS.length]?.id || null;
+    return {
+      districtId: district.id,
+      ownerFactionId,
+      influenceByFaction: Object.fromEntries(FACTIONS.map((faction) => [faction.id, faction.id === ownerFactionId ? 42 : 18])),
+      playerInfluence: 0,
+      influence: 42,
+      danger: district.dangerLevel,
+      wealth: district.wealthLevel,
+      businessDensity: clamp(Math.round((district.wealthLevel + 1) * 1.4), 1, 10),
+      gangPresence: clamp(Math.round((district.dangerLevel + 1) * 1.5), 1, 10)
+    };
+  });
+}
+
+function wantedLabel(level = 0) {
+  const labels = ["Clean", "Suspicious", "Wanted", "High Priority", "Dangerous", "Maximum"];
+  return labels[clamp(Math.round(level), 0, 5)];
 }
 
 function lifeStageFromAge(age = 0) {
@@ -712,6 +779,132 @@ function ensureLifeState(state) {
   state.life.calendar = state.life.calendar || { events: [], appointments: [] };
 }
 
+function updateCasinoVipStatus(state) {
+  if (!state.casinoProgress) return;
+  const wealth = state.player.money + state.player.bankBalance;
+  const businesses = state.player.ownedBusinesses.length;
+  const influence = state.player.influence;
+  const spent = state.casinoProgress.totalBet;
+  let next = "Regular";
+  if (spent >= 1500 || wealth >= 10000) next = "Silver";
+  if (spent >= 4500 || wealth >= 26000 || businesses >= 2) next = "Gold";
+  if (spent >= 10000 || wealth >= 52000 || influence >= 35) next = "Platinum";
+  if (spent >= 18000 || wealth >= 90000 || influence >= 65 || businesses >= 4) next = "Diamond";
+  state.casinoProgress.vipLevel = next;
+}
+
+function recalcEconomySnapshot(state) {
+  if (!state.economy) return;
+  const propertyValue = state.player.ownedProperties.reduce((sum, id) => sum + (state.properties.find((entry) => entry.id === id)?.price || 0), 0);
+  const vehicleValue = state.vehicles.filter((entry) => entry.owned).reduce((sum, entry) => sum + Math.round((entry.price || 0) * 0.65), 0);
+  const businessValue = state.player.ownedBusinesses.reduce((sum, id) => {
+    const business = state.businesses.find((entry) => entry.id === id);
+    if (!business) return sum;
+    return sum + Math.round((business.purchasePrice || 0) * 0.7 + (business.level || 1) * 1200 + (business.security || 0) * 240);
+  }, 0);
+  state.economy.cash = state.player.money;
+  state.economy.bank = state.player.bankBalance;
+  state.economy.debt = state.credit?.debt || 0;
+  state.economy.creditLimit = state.credit?.creditLimit || BALANCE.credit.maxCreditByLevel;
+  state.economy.propertyValue = propertyValue;
+  state.economy.vehicleValue = vehicleValue;
+  state.economy.businessValue = businessValue;
+  state.economy.assets = propertyValue + vehicleValue + businessValue + state.player.money + state.player.bankBalance;
+  state.economy.netWorth = state.economy.assets - state.economy.debt;
+  state.economy.reputation = state.player.reputation.city + state.player.reputation.street + state.player.reputation.business + state.player.reputation.faction;
+  state.economy.influence = state.player.influence;
+}
+
+function ensureStage4State(state) {
+  state.bank = state.bank && typeof state.bank === "object" ? state.bank : {};
+  state.bank.history = Array.isArray(state.bank.history) ? state.bank.history : [];
+  state.bank.transfers = Array.isArray(state.bank.transfers) ? state.bank.transfers : [];
+
+  state.credit = state.credit && typeof state.credit === "object" ? state.credit : {};
+  state.credit.creditReputation = Number.isFinite(state.credit.creditReputation) ? state.credit.creditReputation : 50;
+  state.credit.totalRepaid = Number.isFinite(state.credit.totalRepaid) ? state.credit.totalRepaid : 0;
+  state.credit.totalBorrowed = Number.isFinite(state.credit.totalBorrowed) ? state.credit.totalBorrowed : 0;
+  state.credit.lastPaymentDay = Number.isFinite(state.credit.lastPaymentDay) ? state.credit.lastPaymentDay : state.time.day;
+  state.credit.missedPayments = Number.isFinite(state.credit.missedPayments) ? state.credit.missedPayments : 0;
+  state.credit.interestPaid = Number.isFinite(state.credit.interestPaid) ? state.credit.interestPaid : 0;
+
+  state.gang = state.gang && typeof state.gang === "object" ? state.gang : {};
+  state.gang.currentFactionId = state.gang.currentFactionId || null;
+  state.gang.rank = GANG_RANKS.includes(state.gang.rank) ? state.gang.rank : "Recruit";
+  state.gang.rankProgress = Number.isFinite(state.gang.rankProgress) ? state.gang.rankProgress : 0;
+  state.gang.loyalty = Number.isFinite(state.gang.loyalty) ? state.gang.loyalty : 0;
+  state.gang.streetReputation = Number.isFinite(state.gang.streetReputation) ? state.gang.streetReputation : 0;
+  state.gang.gangReputation = Number.isFinite(state.gang.gangReputation) ? state.gang.gangReputation : 0;
+  state.gang.cityReputation = Number.isFinite(state.gang.cityReputation) ? state.gang.cityReputation : 0;
+  state.gang.businessReputation = Number.isFinite(state.gang.businessReputation) ? state.gang.businessReputation : 0;
+
+  state.territories = Array.isArray(state.territories) ? state.territories : createTerritoryState();
+  state.contacts = state.contacts && typeof state.contacts === "object" ? state.contacts : createContactsState();
+  state.casinoProgress = state.casinoProgress && typeof state.casinoProgress === "object" ? state.casinoProgress : {};
+  state.casinoProgress.totalBet = Number.isFinite(state.casinoProgress.totalBet) ? state.casinoProgress.totalBet : 0;
+  state.casinoProgress.totalWon = Number.isFinite(state.casinoProgress.totalWon) ? state.casinoProgress.totalWon : 0;
+  state.casinoProgress.totalLost = Number.isFinite(state.casinoProgress.totalLost) ? state.casinoProgress.totalLost : 0;
+  state.casinoProgress.vipLevel = CASINO_VIP_LEVELS.includes(state.casinoProgress.vipLevel) ? state.casinoProgress.vipLevel : "Regular";
+  state.casinoProgress.events = Array.isArray(state.casinoProgress.events) ? state.casinoProgress.events : [];
+
+  state.garage = state.garage && typeof state.garage === "object" ? state.garage : {};
+  state.garage.capacity = Number.isFinite(state.garage.capacity) ? state.garage.capacity : 2;
+  state.garage.storedVehicleIds = Array.isArray(state.garage.storedVehicleIds) ? state.garage.storedVehicleIds : [];
+
+  state.cityEconomy = state.cityEconomy && typeof state.cityEconomy === "object" ? state.cityEconomy : {};
+  state.cityEconomy.activeEvents = Array.isArray(state.cityEconomy.activeEvents) ? state.cityEconomy.activeEvents : [];
+  state.cityEconomy.lastEventDay = Number.isFinite(state.cityEconomy.lastEventDay) ? state.cityEconomy.lastEventDay : 0;
+  state.cityEconomy.districts = state.cityEconomy.districts && typeof state.cityEconomy.districts === "object" ? state.cityEconomy.districts : {};
+  for (const district of state.districts || []) {
+    if (!state.cityEconomy.districts[district.id]) {
+      state.cityEconomy.districts[district.id] = {
+        businessActivity: clamp(3 + district.wealthLevel, 1, 10),
+        customerActivity: clamp(3 + district.wealthLevel, 1, 10),
+        wealth: district.wealthLevel,
+        risk: district.dangerLevel,
+        gangInfluence: clamp(3 + district.dangerLevel, 1, 10),
+        propertyDemand: clamp(4 + district.wealthLevel - district.dangerLevel, 1, 10)
+      };
+    }
+  }
+
+  state.economy = state.economy && typeof state.economy === "object" ? state.economy : {};
+  state.economy.financialHistory = Array.isArray(state.economy.financialHistory) ? state.economy.financialHistory : [];
+  state.economy.income = Number.isFinite(state.economy.income) ? state.economy.income : 0;
+  state.economy.expenses = Number.isFinite(state.economy.expenses) ? state.economy.expenses : 0;
+  state.economy.businessRevenue = Number.isFinite(state.economy.businessRevenue) ? state.economy.businessRevenue : 0;
+  state.economy.businessExpenses = Number.isFinite(state.economy.businessExpenses) ? state.economy.businessExpenses : 0;
+  state.economy.luxurySpending = Number.isFinite(state.economy.luxurySpending) ? state.economy.luxurySpending : 0;
+
+  for (const business of state.businesses || []) {
+    business.security = Number.isFinite(business.security) ? business.security : 1;
+    business.level = Number.isFinite(business.level) ? business.level : 1;
+    business.status = business.status || "operational";
+    business.upgradeSlots = Number.isFinite(business.upgradeSlots) ? business.upgradeSlots : 2;
+    business.customers = Number.isFinite(business.customers) ? business.customers : 20 + business.level * 8;
+    business.employeeCapacity = Number.isFinite(business.employeeCapacity) ? business.employeeCapacity : Math.max(business.employees || 0, 3) + 4;
+    business.staff = Array.isArray(business.staff) ? business.staff : Array.from({ length: business.employees || 0 }, () => createBusinessEmployee(business.id));
+    business.revenueHistory = Array.isArray(business.revenueHistory) ? business.revenueHistory : [];
+    business.expenseHistory = Array.isArray(business.expenseHistory) ? business.expenseHistory : [];
+    business.owner = business.owner || null;
+    business.securityLevel = Number.isFinite(business.securityLevel) ? business.securityLevel : business.security;
+  }
+
+  for (const vehicle of state.vehicles || []) {
+    vehicle.upgrades = vehicle.upgrades || { engine: 0, handling: 0, durability: 0, luxury: 0, storage: 0 };
+    vehicle.durability = Number.isFinite(vehicle.durability) ? vehicle.durability : 3;
+    vehicle.storage = Number.isFinite(vehicle.storage) ? vehicle.storage : 2;
+    vehicle.prestige = Number.isFinite(vehicle.prestige) ? vehicle.prestige : 1;
+    vehicle.handling = Number.isFinite(vehicle.handling) ? vehicle.handling : 2;
+    vehicle.luxury = Number.isFinite(vehicle.luxury) ? vehicle.luxury : 1;
+  }
+
+  const ownedVehicleIds = (state.vehicles || []).filter((vehicle) => vehicle.owned).map((vehicle) => vehicle.id);
+  state.garage.storedVehicleIds = [...new Set([...state.garage.storedVehicleIds, ...ownedVehicleIds])].slice(0, state.garage.capacity);
+  recalcEconomySnapshot(state);
+  updateCasinoVipStatus(state);
+}
+
 function updateLifestyle(state) {
   const wealth = state.player.money + state.player.bankBalance;
   const prestige = state.player.ownedProperties.reduce((sum, id) => sum + (state.properties.find((p) => p.id === id)?.prestige || 0), 0);
@@ -750,6 +943,11 @@ function updateFinanceSummary(state) {
   state.life.finance.housingCosts = monthly.filter((tx) => tx.category === "Housing" && tx.amount < 0).reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
   const monthlyExpenseTx = monthly.filter((tx) => tx.amount < 0).length;
   state.life.finance.averageSpending = monthlyExpenseTx ? Math.round(state.life.finance.monthlyExpenses / monthlyExpenseTx) : 0;
+  if (state.economy) {
+    state.economy.income = state.life.finance.monthlyIncome;
+    state.economy.expenses = state.life.finance.monthlyExpenses;
+    recalcEconomySnapshot(state);
+  }
 }
 
 function addNotification(state, category, text, type = "info") {
@@ -767,15 +965,31 @@ function addNotification(state, category, text, type = "info") {
 }
 
 function addTransaction(state, transaction) {
-  state.transactions.unshift({
+  const row = {
     id: makeId("txn"),
     day: state.time.day,
     turn: state.time.turn,
     timestamp: Date.now(),
     category: transaction.category || travelTransactionCategory(transaction.source),
     ...transaction
-  });
+  };
+  state.transactions.unshift(row);
   state.transactions = state.transactions.slice(0, 500);
+  if (state.bank?.history) {
+    if (["bank", "credit"].includes(row.source)) state.bank.history.unshift({ ...row });
+    state.bank.history = state.bank.history.slice(0, 180);
+  }
+  if (state.economy?.financialHistory) {
+    state.economy.financialHistory.unshift({
+      day: row.day,
+      turn: row.turn,
+      amount: row.amount,
+      type: row.type,
+      source: row.source,
+      category: row.category
+    });
+    state.economy.financialHistory = state.economy.financialHistory.slice(0, 240);
+  }
   if (state.life?.finance) updateFinanceSummary(state);
 }
 
@@ -791,6 +1005,12 @@ function addWallet(state, amount, source, description, txType = amount >= 0 ? "i
   });
   if (amount > 0) state.statistics.moneyEarned += amount;
   if (amount < 0) state.statistics.moneySpent += Math.abs(amount);
+  if (state.economy) {
+    if (amount > 0 && source === "business") state.economy.businessRevenue += amount;
+    if (amount < 0 && source === "business") state.economy.businessExpenses += Math.abs(amount);
+    if (amount < 0 && ["casino", "luxury", "date", "entertainment", "wardrobe"].includes(source)) state.economy.luxurySpending += Math.abs(amount);
+    recalcEconomySnapshot(state);
+  }
   if (state.life?.finance) {
     updateLifestyle(state);
     updateSocialStatus(state);
@@ -848,6 +1068,8 @@ function addInfluence(state, amount) {
 function adjustWanted(state, delta) {
   const next = clamp((state.player.wantedLevel || 0) + delta, 0, BALANCE.wanted.maxLevel);
   state.player.wantedLevel = next;
+  if (delta !== 0) addNotification(state, "Police", `Wanted status: ${wantedLabel(next)} (${next}/5).`, next >= 3 ? "error" : "info");
+  if (next >= 3 && delta > 0) addNotification(state, "Police", "Police patrols intensified in high-risk districts.", "info");
   if (next >= BALANCE.wanted.maxLevel && !state.prison.active) {
     state.prison.active = true;
     state.prison.reason = "Wanted level reached maximum";
@@ -1102,6 +1324,11 @@ function dailyBusinessTick(state, days = 1) {
     if (!business.owned) continue;
     state.daily.pendingBusinessIncome[business.id] = (state.daily.pendingBusinessIncome[business.id] || 0) + days;
   }
+  const rentalProperties = state.properties.filter((property) => property.owned && ["Commercial Property", "Mansion", "Penthouse"].includes(property.type));
+  for (const property of rentalProperties) {
+    const dailyIncome = Math.max(0, Math.round((property.rentWeekly || 0) * 0.22));
+    if (dailyIncome > 0) addWallet(state, dailyIncome * days, "property", `${property.name} rental income`, "income");
+  }
 }
 
 function applyCreditInterest(state, days = 1) {
@@ -1111,6 +1338,44 @@ function applyCreditInterest(state, days = 1) {
     const interest = Math.max(0, Math.round(state.credit.debt * rate));
     state.credit.debt += interest;
     state.credit.interestAccrued += interest;
+    if ((state.time.day - (state.credit.lastPaymentDay || 0)) >= BALANCE.credit.missedPaymentDays) {
+      state.credit.missedPayments = (state.credit.missedPayments || 0) + 1;
+      state.credit.creditReputation = clamp((state.credit.creditReputation || 50) - 2, 5, 100);
+    }
+  }
+  recalcEconomySnapshot(state);
+}
+
+function tickCityEconomy(state, days = 1) {
+  if (!state.cityEconomy?.districts || days <= 0) return;
+  const eventPool = [
+    "Business Boom",
+    "Market Crash",
+    "Gang Conflict",
+    "Luxury Party",
+    "Casino Tournament",
+    "Police Operation",
+    "Business Opportunity",
+    "Vehicle Show",
+    "District Festival",
+    "Underground Opportunity"
+  ];
+  for (let i = 0; i < days; i += 1) {
+    for (const district of Object.values(state.cityEconomy.districts)) {
+      const wealthDelta = Math.round((seededRandom(state) - 0.5) * 2);
+      const riskDelta = Math.round((seededRandom(state) - 0.5) * 2);
+      district.wealth = clamp(district.wealth + wealthDelta, 1, 10);
+      district.risk = clamp(district.risk + riskDelta, 1, 10);
+      district.businessActivity = clamp(district.businessActivity + Math.round((district.wealth - district.risk) / 4), 1, 10);
+      district.customerActivity = clamp(district.customerActivity + Math.round((seededRandom(state) - 0.5) * 2), 1, 10);
+      district.gangInfluence = clamp(district.gangInfluence + Math.round((district.risk - 5) / 2), 1, 10);
+      district.propertyDemand = clamp(district.propertyDemand + Math.round((district.wealth - district.risk) / 3), 1, 10);
+    }
+    if (seededRandom(state) < 0.25) {
+      const event = eventPool[Math.floor(seededRandom(state) * eventPool.length)];
+      state.cityEconomy.activeEvents.unshift({ id: makeId("city-event"), day: state.time.day, name: event });
+      state.cityEconomy.activeEvents = state.cityEconomy.activeEvents.slice(0, 18);
+    }
   }
 }
 
@@ -1300,6 +1565,7 @@ function nextTurn(state, turns = 1) {
       state.statistics.daysPlayed = state.time.day;
       state.daily.rewardClaimedDay = Math.min(state.daily.rewardClaimedDay, state.time.day - 1);
       dailyBusinessTick(state, 1);
+      tickCityEconomy(state, 1);
       applyCreditInterest(state, 1);
       refreshDailyQuests(state);
       handleRentAndBills(state);
@@ -1646,11 +1912,68 @@ export function createInitialState() {
       reason: null,
       remainingTurns: 0
     },
+    bank: {
+      history: [],
+      transfers: []
+    },
     credit: {
       enabled: true,
       debt: 0,
       creditLimit: BALANCE.credit.maxCreditByLevel,
-      interestAccrued: 0
+      interestAccrued: 0,
+      creditReputation: 50,
+      totalRepaid: 0,
+      totalBorrowed: 0,
+      lastPaymentDay: 1,
+      missedPayments: 0,
+      interestPaid: 0
+    },
+    gang: {
+      currentFactionId: null,
+      rank: "Recruit",
+      rankProgress: 0,
+      loyalty: 0,
+      streetReputation: 0,
+      gangReputation: 0,
+      cityReputation: 0,
+      businessReputation: 0
+    },
+    territories: createTerritoryState(),
+    contacts: createContactsState(),
+    casinoProgress: {
+      totalBet: 0,
+      totalWon: 0,
+      totalLost: 0,
+      vipLevel: "Regular",
+      events: []
+    },
+    garage: {
+      capacity: 2,
+      storedVehicleIds: [VEHICLES.find((entry) => entry.owned)?.id || VEHICLES[0].id]
+    },
+    cityEconomy: {
+      lastEventDay: 0,
+      activeEvents: [],
+      districts: {}
+    },
+    economy: {
+      cash: 10000,
+      bank: 0,
+      assets: 10000,
+      debt: 0,
+      creditLimit: BALANCE.credit.maxCreditByLevel,
+      income: 0,
+      expenses: 0,
+      businessRevenue: 0,
+      businessExpenses: 0,
+      propertyValue: 0,
+      vehicleValue: 0,
+      businessValue: 0,
+      luxurySpending: 0,
+      reputation: 0,
+      influence: 5,
+      netWorth: 10000,
+      financialHistory: []
     },
     social: {
       friends: [],
@@ -1772,6 +2095,7 @@ export function createInitialState() {
   updateLifestyle(state);
   updateSocialStatus(state);
   updateFinanceSummary(state);
+  ensureStage4State(state);
   addNotification(state, "System", "Welcome to NARCOS CITY. Create your character to begin.");
   refreshDailyQuests(state);
   refreshQuests(state);
@@ -1795,7 +2119,13 @@ function migrateState(rawState) {
     weather: { ...base.weather, ...rawState.weather },
     daily: { ...base.daily, ...rawState.daily },
     prison: { ...base.prison, ...rawState.prison },
+    bank: { ...base.bank, ...rawState.bank },
     credit: { ...base.credit, ...rawState.credit },
+    gang: { ...base.gang, ...rawState.gang },
+    garage: { ...base.garage, ...rawState.garage },
+    casinoProgress: { ...base.casinoProgress, ...rawState.casinoProgress },
+    economy: { ...base.economy, ...rawState.economy },
+    cityEconomy: { ...base.cityEconomy, ...rawState.cityEconomy },
     social: { ...base.social, ...rawState.social },
     family: { ...base.family, ...rawState.family },
     relationshipsFoundation: {
@@ -1834,6 +2164,8 @@ function migrateState(rawState) {
   merged.crimeOperations = Array.isArray(rawState.crimeOperations) ? rawState.crimeOperations : clone(CRIME_OPERATIONS);
   merged.prisonActions = Array.isArray(rawState.prisonActions) ? rawState.prisonActions : clone(PRISON_ACTIONS);
   merged.backgroundPopulation = rawState.backgroundPopulation && typeof rawState.backgroundPopulation === "object" ? rawState.backgroundPopulation : clone(base.backgroundPopulation);
+  merged.contacts = rawState.contacts && typeof rawState.contacts === "object" ? rawState.contacts : clone(base.contacts);
+  merged.territories = Array.isArray(rawState.territories) ? rawState.territories : clone(base.territories);
   merged.relationships = rawState.relationships && typeof rawState.relationships === "object" ? rawState.relationships : createRelationships();
   merged.quests = Array.isArray(rawState.quests)
     ? rawState.quests.map((quest) => ({ ...quest, objectives: (quest.objectives || []).map((obj) => ({ ...obj, progress: obj.progress || 0 })) }))
@@ -1880,6 +2212,7 @@ function migrateState(rawState) {
   merged.credit.creditLimit = Math.max(BALANCE.credit.maxCreditByLevel, stateCreditLimitForLevel(merged.player.level));
   ensureLifeState(merged);
   ensureFamilyState(merged);
+  ensureStage4State(merged);
   seedPlayerFamily(merged);
   seedNpcFamilies(merged);
   merged.life.needs.hunger = merged.player.hunger;
@@ -1916,6 +2249,7 @@ export function normalizeState(rawState) {
 export function createPlayer(state, name) {
   ensureLifeState(state);
   ensureFamilyState(state);
+  ensureStage4State(state);
   const clean = String(name || "").trim();
   state.player.name = (clean || state.player.name || "La Reina").slice(0, 24);
   state.family.families[state.family.playerFamilyId].name = `${state.player.name} Family`;
@@ -2152,6 +2486,7 @@ export function chooseEventChoice(state, choiceId) {
 export function interactWithNpc(state, npcId, interactionType = "talk", silent = false) {
   if (blockedByPrison(state)) return state;
   ensureLifeState(state);
+  ensureStage4State(state);
   const npc = state.npcs.find((entry) => entry.id === npcId);
   if (!npc) {
     addNotification(state, "Social", "NPC unavailable.", "error");
@@ -2257,6 +2592,10 @@ export function interactWithNpc(state, npcId, interactionType = "talk", silent =
   state.statistics.actionCounts[interactionType] = (state.statistics.actionCounts[interactionType] || 0) + 1;
 
   addFactionReputation(state, npc.faction, 1);
+  if (state.contacts[npcId]) {
+    state.contacts[npcId].trust = clamp((state.contacts[npcId].trust || 0) + (delta >= 0 ? 2 : -2), 0, 100);
+    state.contacts[npcId].influence = clamp((state.contacts[npcId].influence || 1) + (relation.value >= 40 ? 1 : 0), 1, 10);
+  }
 
   if (interactionType === "hang-out") advanceByMinutes(state, 120);
   else if (interactionType === "go-shopping") advanceByMinutes(state, 75);
@@ -2345,12 +2684,14 @@ export function coolDistrictHeat(state, districtId) {
 
 export function bankDeposit(state, amount = 200, silent = false) {
   if (blockedByPrison(state)) return state;
+  ensureStage4State(state);
   const value = Math.max(BALANCE.bank.depositMinimum, Math.round(Number(amount) || 0));
   if (!addWallet(state, -value, "bank", "Bank deposit", "expense")) {
     addNotification(state, "Economy", "Insufficient funds for deposit.", "error");
     return state;
   }
   state.player.bankBalance += value;
+  recalcEconomySnapshot(state);
   addXP(state, 8);
   addGeneralReputation(state, "city", 1);
   state.statistics.actionCounts["bank-deposit"] = (state.statistics.actionCounts["bank-deposit"] || 0) + 1;
@@ -2363,6 +2704,7 @@ export function bankDeposit(state, amount = 200, silent = false) {
 
 export function bankWithdraw(state, amount = 200, silent = false) {
   if (blockedByPrison(state)) return state;
+  ensureStage4State(state);
   const value = Math.max(BALANCE.bank.withdrawMinimum, Math.round(Number(amount) || 0));
   if (state.player.bankBalance < value) {
     addNotification(state, "Economy", "Insufficient bank balance.", "error");
@@ -2370,12 +2712,41 @@ export function bankWithdraw(state, amount = 200, silent = false) {
   }
   state.player.bankBalance -= value;
   addWallet(state, value, "bank", "Bank withdrawal", "income");
+  recalcEconomySnapshot(state);
   addXP(state, 6);
   state.statistics.actionCounts["bank-withdraw"] = (state.statistics.actionCounts["bank-withdraw"] || 0) + 1;
   state.statistics.totalActionsCompleted += 1;
   if (!silent) addNotification(state, "Economy", `Withdrew $${value}.`, "success");
   refreshQuests(state);
   refreshAchievements(state);
+  return state;
+}
+
+export function bankTransfer(state, target = "family", amount = 150) {
+  if (blockedByPrison(state)) return state;
+  ensureStage4State(state);
+  const value = Math.max(BALANCE.bank.transferMinimum, Math.round(Number(amount) || 0));
+  if (state.player.bankBalance < value) {
+    addNotification(state, "Economy", "Insufficient bank balance for transfer.", "error");
+    return state;
+  }
+  state.player.bankBalance -= value;
+  const entry = { id: makeId("transfer"), day: state.time.day, turn: state.time.turn, target, amount: value };
+  state.bank.transfers.unshift(entry);
+  state.bank.transfers = state.bank.transfers.slice(0, 120);
+  addTransaction(state, { type: "expense", amount: -value, source: "bank", category: "Transfer", description: `Bank transfer to ${target}` });
+  if (target === "cash") {
+    addWallet(state, value, "bank", "Bank transfer received", "income");
+  } else if (target === "family") {
+    state.family.legacy.wealth = (state.family.legacy.wealth || 0) + value;
+    addInfluence(state, 1);
+    addNotification(state, "Family", `Transferred $${value} to family reserve.`, "success");
+  } else if (target === "business") {
+    state.economy.businessRevenue += value;
+    addGeneralReputation(state, "business", 1);
+    addNotification(state, "Business", `Transferred $${value} to operations reserve.`, "success");
+  }
+  recalcEconomySnapshot(state);
   return state;
 }
 
@@ -2467,6 +2838,7 @@ export function useInventoryItem(state, itemId) {
 
 export function buyVehicle(state, vehicleId) {
   if (blockedByPrison(state)) return state;
+  ensureStage4State(state);
   const vehicle = state.vehicles.find((entry) => entry.id === vehicleId);
   if (!vehicle) {
     addNotification(state, "Transport", "Vehicle not found.", "error");
@@ -2482,8 +2854,12 @@ export function buyVehicle(state, vehicleId) {
   }
   vehicle.owned = true;
   state.player.currentVehicleId = vehicle.id;
+  if (state.garage.storedVehicleIds.length < state.garage.capacity && !state.garage.storedVehicleIds.includes(vehicle.id)) {
+    state.garage.storedVehicleIds.push(vehicle.id);
+  }
   state.statistics.vehiclesOwned = state.vehicles.filter((entry) => entry.owned).length;
-  addGeneralReputation(state, "city", 1);
+  addGeneralReputation(state, "city", 1 + Math.floor((vehicle.prestige || 1) / 2));
+  if ((vehicle.luxury || 0) >= 4) addInfluence(state, 2);
   addXP(state, 18);
   state.statistics.totalActionsCompleted += 1;
   state.statistics.actionCounts["buy-vehicle"] = (state.statistics.actionCounts["buy-vehicle"] || 0) + 1;
@@ -2494,6 +2870,7 @@ export function buyVehicle(state, vehicleId) {
 }
 
 export function cycleVehicle(state, silent = false) {
+  ensureStage4State(state);
   const owned = state.vehicles.filter((entry) => entry.owned);
   if (!owned.length) return state;
   const currentIndex = owned.findIndex((entry) => entry.id === state.player.currentVehicleId);
@@ -2503,10 +2880,114 @@ export function cycleVehicle(state, silent = false) {
   return state;
 }
 
+export function repairVehicle(state, vehicleId) {
+  if (blockedByPrison(state)) return state;
+  ensureStage4State(state);
+  const vehicle = state.vehicles.find((entry) => entry.id === vehicleId);
+  if (!vehicle || !vehicle.owned) {
+    addNotification(state, "Transport", "Vehicle unavailable for repair.", "error");
+    return state;
+  }
+  const missingDurability = Math.max(0, 5 - (vehicle.durability || 3));
+  const cost = Math.max(120, missingDurability * 180);
+  if (!addWallet(state, -cost, "vehicle", `Repair ${vehicle.name}`, "expense")) {
+    addNotification(state, "Economy", "Insufficient funds for repair.", "error");
+    return state;
+  }
+  vehicle.durability = 5;
+  vehicle.status = "Operational";
+  addNotification(state, "Transport", `${vehicle.name} repaired.`, "success");
+  return state;
+}
+
+export function upgradeVehicle(state, vehicleId, category = "engine") {
+  if (blockedByPrison(state)) return state;
+  ensureStage4State(state);
+  const vehicle = state.vehicles.find((entry) => entry.id === vehicleId);
+  if (!vehicle || !vehicle.owned) {
+    addNotification(state, "Transport", "Vehicle unavailable for upgrade.", "error");
+    return state;
+  }
+  if (!["engine", "handling", "durability", "luxury", "storage"].includes(category)) {
+    addNotification(state, "Transport", "Upgrade category unavailable.", "error");
+    return state;
+  }
+  const current = vehicle.upgrades?.[category] || 0;
+  const cost = 260 + current * 160 + (vehicle.price || 0) * 0.02;
+  if (!addWallet(state, -Math.round(cost), "vehicle", `${vehicle.name} ${category} upgrade`, "expense")) {
+    addNotification(state, "Economy", "Insufficient funds for vehicle upgrade.", "error");
+    return state;
+  }
+  vehicle.upgrades[category] = current + 1;
+  if (category === "engine") {
+    vehicle.speed += 1;
+    vehicle.travelCost = Math.max(35, (vehicle.travelCost || 60) - 2);
+  }
+  if (category === "handling") vehicle.handling += 1;
+  if (category === "durability") vehicle.durability = clamp((vehicle.durability || 3) + 1, 1, 7);
+  if (category === "luxury") {
+    vehicle.luxury += 1;
+    vehicle.prestige = (vehicle.prestige || 1) + 1;
+    addInfluence(state, 1);
+  }
+  if (category === "storage") vehicle.storage += 1;
+  recalcEconomySnapshot(state);
+  addNotification(state, "Transport", `${vehicle.name} upgraded: ${category}.`, "success");
+  return state;
+}
+
+export function sellVehicle(state, vehicleId) {
+  if (blockedByPrison(state)) return state;
+  ensureStage4State(state);
+  const vehicle = state.vehicles.find((entry) => entry.id === vehicleId);
+  if (!vehicle || !vehicle.owned) {
+    addNotification(state, "Transport", "Vehicle unavailable for sale.", "error");
+    return state;
+  }
+  if (vehicle.id === "motorcycle-starter" && state.vehicles.filter((entry) => entry.owned).length <= 1) {
+    addNotification(state, "Transport", "Cannot sell the only active vehicle.", "info");
+    return state;
+  }
+  const upgradeValue = Object.values(vehicle.upgrades || {}).reduce((sum, value) => sum + value, 0) * 120;
+  const saleValue = Math.max(120, Math.round((vehicle.price || 0) * 0.62 + upgradeValue));
+  vehicle.owned = false;
+  addWallet(state, saleValue, "vehicle", `Sell ${vehicle.name}`, "income");
+  state.garage.storedVehicleIds = state.garage.storedVehicleIds.filter((id) => id !== vehicle.id);
+  if (state.player.currentVehicleId === vehicle.id) {
+    state.player.currentVehicleId = state.vehicles.find((entry) => entry.owned)?.id || "motorcycle-starter";
+  }
+  state.statistics.vehiclesOwned = state.vehicles.filter((entry) => entry.owned).length;
+  recalcEconomySnapshot(state);
+  addNotification(state, "Transport", `${vehicle.name} sold for $${saleValue}.`, "success");
+  return state;
+}
+
+export function storeVehicle(state, vehicleId) {
+  if (blockedByPrison(state)) return state;
+  ensureStage4State(state);
+  const vehicle = state.vehicles.find((entry) => entry.id === vehicleId);
+  if (!vehicle || !vehicle.owned) {
+    addNotification(state, "Transport", "Only owned vehicles can be stored.", "error");
+    return state;
+  }
+  if (state.garage.storedVehicleIds.includes(vehicle.id)) {
+    addNotification(state, "Transport", `${vehicle.name} already in garage.`, "info");
+    return state;
+  }
+  if (state.garage.storedVehicleIds.length >= state.garage.capacity) {
+    addNotification(state, "Transport", "Garage capacity reached.", "error");
+    return state;
+  }
+  state.garage.storedVehicleIds.push(vehicle.id);
+  addNotification(state, "Transport", `${vehicle.name} stored in garage.`, "success");
+  return state;
+}
+
 export function buyProperty(state, propertyId) {
   if (blockedByPrison(state)) return state;
   ensureLifeState(state);
   ensureFamilyState(state);
+  ensureStage4State(state);
   const property = state.properties.find((entry) => entry.id === propertyId);
   if (!property) {
     addNotification(state, "Property", "Property not found.", "error");
@@ -2542,6 +3023,8 @@ export function buyProperty(state, propertyId) {
   addCalendarEvent(state, { type: "Property", title: `Purchased ${property.name}` });
   addFamilyEvent(state, { type: "Family Home", title: `Moved into ${property.name}` });
   addXP(state, 18);
+  state.garage.capacity = Math.max(state.garage.capacity, Math.max(2, property.storage || 2));
+  recalcEconomySnapshot(state);
   refreshQuests(state);
   refreshAchievements(state);
   addNotification(state, "Property", `Purchased ${property.name}.`, "success");
@@ -2552,6 +3035,7 @@ export function rentProperty(state, propertyId, mode = "weekly") {
   if (blockedByPrison(state)) return state;
   ensureLifeState(state);
   ensureFamilyState(state);
+  ensureStage4State(state);
   const property = state.properties.find((entry) => entry.id === propertyId);
   if (!property) {
     addNotification(state, "Housing", "Property not found.", "error");
@@ -2578,6 +3062,7 @@ export function rentProperty(state, propertyId, mode = "weekly") {
     state.family.households[state.family.playerHouseholdId].homePropertyId = property.id;
   }
   property.rented = true;
+  state.garage.capacity = Math.max(state.garage.capacity, Math.max(2, property.storage || 2));
   setNeeds(state, { mood: 4 });
   addCalendarEvent(state, { type: "Housing", title: `Rented ${property.name}` });
   addNotification(state, "Housing", `Residence set: ${property.name} (${mode}).`, "success");
@@ -2601,6 +3086,33 @@ export function payRent(state) {
   residence.rentOverdueDays = 0;
   setNeeds(state, { mood: 2 });
   addNotification(state, "Housing", `Rent paid for ${property?.name || "residence"}.`, "success");
+  return state;
+}
+
+export function upgradeProperty(state, propertyId, category = "security") {
+  if (blockedByPrison(state)) return state;
+  ensureStage4State(state);
+  const property = state.properties.find((entry) => entry.id === propertyId);
+  if (!property || !property.owned) {
+    addNotification(state, "Property", "Owned property required for upgrade.", "error");
+    return state;
+  }
+  const cost = 650 + (property.prestige || 1) * 220;
+  if (!addWallet(state, -cost, "property", `${property.name} ${category} upgrade`, "expense")) {
+    addNotification(state, "Economy", "Insufficient funds for property upgrade.", "error");
+    return state;
+  }
+  if (category === "security") property.security += 1;
+  if (category === "storage") property.storage += 1;
+  if (category === "comfort") property.comfort += 1;
+  if (category === "luxury") {
+    property.prestige += 1;
+    addInfluence(state, 1);
+  }
+  if (category === "escape") property.security += 1;
+  addGeneralReputation(state, "city", 1);
+  recalcEconomySnapshot(state);
+  addNotification(state, "Property", `${property.name} upgraded (${category}).`, "success");
   return state;
 }
 
@@ -2932,28 +3444,39 @@ export function getFamilyOverview(state) {
 }
 
 function collectBusinessIncome(state, business) {
+  ensureStage4State(state);
   const pendingDays = state.daily.pendingBusinessIncome[business.id] || 0;
   if (pendingDays <= 0) {
     addNotification(state, "Business", `${business.name} has no new income yet.`, "info");
     return state;
   }
-  const gross = pendingDays * (business.income + business.level * 120);
-  const expenses = pendingDays * (business.expenses + business.level * 60);
+  const districtStats = state.cityEconomy?.districts?.[business.location || state.selectedDistrictId];
+  const economyBoost = districtStats ? (districtStats.businessActivity + districtStats.customerActivity) / 20 : 1;
+  const customerFactor = Math.max(0.7, (business.customers || 20) / 25);
+  const staffCost = (business.staff || []).reduce((sum, employee) => sum + (employee.salary || 0), 0);
+  const gross = Math.round(pendingDays * (business.income + business.level * 120) * economyBoost * customerFactor);
+  const expenses = Math.round(pendingDays * (business.expenses + business.level * 60) + staffCost * pendingDays * 0.45);
   const net = Math.max(0, gross - expenses);
   addWallet(state, net, "business", `${business.name} daily income (${pendingDays}d)`, "income");
   addWallet(state, -expenses, "business", `${business.name} operating expenses (${pendingDays}d)`, "expense");
   state.daily.pendingBusinessIncome[business.id] = 0;
   business.lastCollectedDay = state.time.day;
+  business.revenueHistory.unshift({ day: state.time.day, amount: gross });
+  business.expenseHistory.unshift({ day: state.time.day, amount: expenses });
+  business.revenueHistory = business.revenueHistory.slice(0, 45);
+  business.expenseHistory = business.expenseHistory.slice(0, 45);
   state.statistics.businessCollectCount += 1;
   addGeneralReputation(state, "business", 1 + Math.floor(business.level / 2));
   addInfluence(state, 1);
   addXP(state, 14);
+  recalcEconomySnapshot(state);
   addNotification(state, "Business", `${business.name} settled net $${net} after expenses.`, "success");
   return state;
 }
 
 export function runBusinessAction(state, businessId, mode = "auto") {
   if (blockedByPrison(state)) return state;
+  ensureStage4State(state);
   const business = state.businesses.find((entry) => entry.id === businessId);
   if (!business) {
     addNotification(state, "Business", "Business not found.", "error");
@@ -2966,9 +3489,14 @@ export function runBusinessAction(state, businessId, mode = "auto") {
       return state;
     }
     business.owned = true;
+    business.owner = "player";
     state.player.ownedBusinesses.push(business.id);
     state.statistics.businessesOwned = state.player.ownedBusinesses.length;
     state.daily.pendingBusinessIncome[business.id] = 1;
+    business.customers = Math.max(business.customers || 20, 24);
+    business.staff = business.staff || [];
+    while (business.staff.length < Math.max(2, Math.min(4, business.employees || 2))) business.staff.push(createBusinessEmployee(business.id));
+    business.employeeCapacity = Math.max(business.employeeCapacity || 0, (business.employees || 0) + 4);
     addGeneralReputation(state, "business", 3);
     addInfluence(state, 2);
     addXP(state, 24);
@@ -2983,26 +3511,101 @@ export function runBusinessAction(state, businessId, mode = "auto") {
     business.income += 220;
     business.expenses += 90;
     business.reputation += 3;
+    business.customers += 8;
+    business.security = clamp((business.security || 1) + 1, 1, 10);
+    business.upgradeSlots = Math.max(0, (business.upgradeSlots || 0) - 1);
     addGeneralReputation(state, "business", 2);
     addInfluence(state, 1);
     addXP(state, 22);
     addNotification(state, "Business", `${business.name} upgraded to level ${business.level}.`, "success");
+  } else if (mode === "hire") {
+    if ((business.staff || []).length >= (business.employeeCapacity || 8)) {
+      addNotification(state, "Business", "Employee capacity reached.", "info");
+      return state;
+    }
+    const hiringCost = 180 + business.level * 25;
+    if (!addWallet(state, -hiringCost, "business", `${business.name} hiring`, "expense")) {
+      addNotification(state, "Economy", "Insufficient funds to hire staff.", "error");
+      return state;
+    }
+    business.staff.push(createBusinessEmployee(business.id));
+    business.employees = business.staff.length;
+    business.customers += 3;
+    business.reputation += 1;
+    addNotification(state, "Business", `${business.name} hired new staff.`, "success");
+  } else if (mode === "fire") {
+    if (!(business.staff || []).length) {
+      addNotification(state, "Business", "No staff to release.", "info");
+      return state;
+    }
+    business.staff.pop();
+    business.employees = business.staff.length;
+    business.customers = Math.max(6, (business.customers || 20) - 2);
+    addNotification(state, "Business", `${business.name} staff reduced.`, "info");
+  } else if (mode === "security") {
+    const securityCost = 240 + business.level * 80;
+    if (!addWallet(state, -securityCost, "business", `${business.name} security upgrade`, "expense")) {
+      addNotification(state, "Economy", "Insufficient funds for security.", "error");
+      return state;
+    }
+    business.security = clamp((business.security || 1) + 1, 1, 10);
+    business.securityLevel = business.security;
+    business.reputation += 1;
+    addNotification(state, "Business", `${business.name} security improved.`, "success");
+  } else if (mode === "sell") {
+    const value = Math.round((business.purchasePrice || 0) * 0.65 + (business.level || 1) * 800);
+    addWallet(state, value, "business", `Sell ${business.name}`, "income");
+    business.owned = false;
+    business.owner = null;
+    business.staff = [];
+    business.employees = 0;
+    state.player.ownedBusinesses = state.player.ownedBusinesses.filter((id) => id !== business.id);
+    state.statistics.businessesOwned = state.player.ownedBusinesses.length;
+    addNotification(state, "Business", `${business.name} sold for $${value}.`, "success");
   } else {
     collectBusinessIncome(state, business);
   }
 
   state.statistics.totalActionsCompleted += 1;
   state.statistics.actionCounts["business-action"] = (state.statistics.actionCounts["business-action"] || 0) + 1;
+  recalcEconomySnapshot(state);
   refreshQuests(state);
   refreshAchievements(state);
   return state;
 }
 
-export function runFactionAction(state, factionId) {
+export function runFactionAction(state, factionId, mode = "mission") {
   if (blockedByPrison(state)) return state;
+  ensureStage4State(state);
   const faction = state.factions.find((entry) => entry.id === factionId);
   if (!faction) {
     addNotification(state, "Faction", "Faction unavailable.", "error");
+    return state;
+  }
+  if (mode === "join") {
+    if (state.gang.currentFactionId === factionId) {
+      addNotification(state, "Faction", `Already aligned with ${faction.name}.`, "info");
+      return state;
+    }
+    state.gang.currentFactionId = factionId;
+    state.gang.rank = "Recruit";
+    state.gang.rankProgress = 0;
+    state.gang.loyalty = 8;
+    addFactionReputation(state, factionId, 3);
+    addInfluence(state, 1);
+    addNotification(state, "Faction", `Joined ${faction.name} as Recruit.`, "success");
+    return state;
+  }
+  if (mode === "leave") {
+    if (!state.gang.currentFactionId) {
+      addNotification(state, "Faction", "No active gang membership.", "info");
+      return state;
+    }
+    state.gang.currentFactionId = null;
+    state.gang.rank = "Recruit";
+    state.gang.rankProgress = 0;
+    state.gang.loyalty = Math.max(0, state.gang.loyalty - 10);
+    addNotification(state, "Faction", "Gang membership ended.", "info");
     return state;
   }
   if (state.player.energy < 6) {
@@ -3010,16 +3613,95 @@ export function runFactionAction(state, factionId) {
     return state;
   }
   state.player.energy = clamp(state.player.energy - 6, 0, 100);
-  addFactionReputation(state, factionId, 2);
-  faction.reputation += 2;
+  const repGain = mode === "challenge" ? 4 : 2;
+  addFactionReputation(state, factionId, repGain);
+  faction.reputation += repGain;
+  state.gang.rankProgress += repGain + Math.floor((state.player.influence || 0) / 20);
+  state.gang.loyalty = clamp((state.gang.loyalty || 0) + 2, 0, 100);
+  const rankIndex = Math.min(GANG_RANKS.length - 1, Math.floor((state.gang.rankProgress || 0) / 14));
+  state.gang.rank = GANG_RANKS[rankIndex];
   addGeneralReputation(state, "faction", BALANCE.reputation.factionAction);
   addInfluence(state, 1);
   addXP(state, 16);
+  state.gang.gangReputation = state.player.reputation.faction;
+  state.gang.streetReputation = state.player.reputation.street;
+  state.gang.cityReputation = state.player.reputation.city;
+  state.gang.businessReputation = state.player.reputation.business;
   state.statistics.totalActionsCompleted += 1;
   state.statistics.actionCounts["faction-action"] = (state.statistics.actionCounts["faction-action"] || 0) + 1;
   nextTurn(state, 1);
   evaluatePostAction(state, "action");
-  addNotification(state, "Faction", `You improved standing with ${faction.name}.`, "success");
+  addNotification(state, "Faction", `You improved standing with ${faction.name}. Rank: ${state.gang.rank}.`, "success");
+  return state;
+}
+
+export function runTerritoryAction(state, districtId, action = "scout") {
+  if (blockedByPrison(state)) return state;
+  ensureStage4State(state);
+  const territory = state.territories.find((entry) => entry.districtId === districtId);
+  if (!territory) {
+    addNotification(state, "Territory", "District territory not found.", "error");
+    return state;
+  }
+  const factionId = state.gang.currentFactionId;
+  const activeInfluence = factionId ? (territory.influenceByFaction[factionId] || 0) : 0;
+  if (action === "scout") {
+    addNotification(state, "Territory", `${districtId}: owner ${territory.ownerFactionId || "none"}, danger ${territory.danger}, wealth ${territory.wealth}.`, "info");
+    return state;
+  }
+  if (action === "build-influence") {
+    const cost = 220;
+    if (!addWallet(state, -cost, "territory", `Influence operation in ${districtId}`, "expense")) {
+      addNotification(state, "Economy", "Insufficient funds to build influence.", "error");
+      return state;
+    }
+    territory.playerInfluence += 3;
+    if (factionId) territory.influenceByFaction[factionId] = activeInfluence + 4;
+    addInfluence(state, 2);
+    addNotification(state, "Territory", "Influence operation completed.", "success");
+  } else if (action === "support-faction") {
+    if (!factionId) {
+      addNotification(state, "Territory", "Join a gang to support faction control.", "error");
+      return state;
+    }
+    territory.influenceByFaction[factionId] = activeInfluence + 6;
+    addFactionReputation(state, factionId, 2);
+    addNotification(state, "Territory", "Faction influence increased.", "success");
+  } else if (action === "challenge-rival") {
+    if (!factionId) {
+      addNotification(state, "Territory", "Join a gang to challenge rivals.", "error");
+      return state;
+    }
+    const successChance = clamp(0.28 + ((activeInfluence + territory.playerInfluence) / 180), 0.2, 0.85);
+    if (seededRandom(state) <= successChance) {
+      territory.ownerFactionId = factionId;
+      territory.influenceByFaction[factionId] = activeInfluence + 8;
+      addInfluence(state, 3);
+      addNotification(state, "Territory", "Challenge succeeded. District control shifted.", "success");
+    } else {
+      adjustWanted(state, 1);
+      territory.gangPresence = clamp(territory.gangPresence + 1, 1, 10);
+      addNotification(state, "Territory", "Challenge failed. Heat increased.", "error");
+    }
+  } else if (action === "control-territory") {
+    if (!factionId) {
+      addNotification(state, "Territory", "Join a gang first.", "error");
+      return state;
+    }
+    if ((territory.influenceByFaction[factionId] || 0) + territory.playerInfluence >= 55) {
+      territory.ownerFactionId = factionId;
+      addGeneralReputation(state, "faction", 2);
+      addNotification(state, "Territory", "Territory control secured.", "success");
+    } else {
+      addNotification(state, "Territory", "Need more influence before controlling territory.", "info");
+    }
+  }
+  territory.influence = Math.max(...Object.values(territory.influenceByFaction));
+  state.statistics.actionCounts["territory-action"] = (state.statistics.actionCounts["territory-action"] || 0) + 1;
+  state.statistics.totalActionsCompleted += 1;
+  nextTurn(state, 1);
+  refreshQuests(state);
+  refreshAchievements(state);
   return state;
 }
 
@@ -3035,6 +3717,7 @@ function increaseCasinoBetUsed(state, amount) {
 
 export function casinoPlay(state, game = "coinFlip", desiredBet = 100) {
   if (blockedByPrison(state)) return state;
+  ensureStage4State(state);
   const maxRemaining = BALANCE.casino.dailyBetLimit - casinoBetLimitUsed(state);
   if (maxRemaining < BALANCE.casino.minBet) {
     addNotification(state, "Economy", "Daily casino limit reached.", "error");
@@ -3047,18 +3730,38 @@ export function casinoPlay(state, game = "coinFlip", desiredBet = 100) {
   }
   increaseCasinoBetUsed(state, bet);
 
-  const chance = game === "simpleDice" ? 0.4 : game === "highLow" ? 0.45 : 0.5;
+  const chanceByGame = {
+    coinFlip: 0.5,
+    highLow: 0.45,
+    simpleDice: 0.4,
+    dice: 0.42,
+    roulette: 0.35,
+    blackjack: 0.44,
+    slots: 0.32
+  };
+  const chance = chanceByGame[game] ?? 0.45;
   const win = seededRandom(state) <= chance;
   const multiplier = BALANCE.casino.payoutMultiplier[game] || 1;
+  state.casinoProgress.totalBet += bet;
   if (win) {
     const payout = Math.round(bet * (1 + multiplier));
     addWallet(state, payout, "casino", `${game} payout`, "income");
+    state.casinoProgress.totalWon += payout - bet;
     state.statistics.casinoWins += 1;
     addGeneralReputation(state, "city", 1);
     addNotification(state, "Economy", `${game} win: +$${payout - bet}.`, "success");
   } else {
+    state.casinoProgress.totalLost += bet;
     state.statistics.casinoLosses += 1;
     addNotification(state, "Economy", `${game} loss: -$${bet}.`, "error");
+  }
+  updateCasinoVipStatus(state);
+  if (seededRandom(state) < 0.15) {
+    const events = ["VIP Night", "Tournament", "Luxury Party", "High Roller Event", "Special Guest Event"];
+    const eventName = events[Math.floor(seededRandom(state) * events.length)];
+    state.casinoProgress.events.unshift({ id: makeId("casino-event"), day: state.time.day, name: eventName });
+    state.casinoProgress.events = state.casinoProgress.events.slice(0, 10);
+    addNotification(state, "Casino", `Casino event unlocked: ${eventName}.`, "success");
   }
 
   state.statistics.casinoPlays += 1;
@@ -3130,6 +3833,7 @@ export function runJobAction(state, jobId) {
 
 export function runCrimeOperation(state, operationId) {
   if (blockedByPrison(state)) return state;
+  ensureStage4State(state);
   const operation = state.crimeOperations.find((entry) => entry.id === operationId);
   if (!operation) {
     addNotification(state, "Event", "Operation not found.", "error");
@@ -3153,11 +3857,15 @@ export function runCrimeOperation(state, operationId) {
     addGeneralReputation(state, "city", operation.reputationOnSuccess?.city || 0);
     addGeneralReputation(state, "business", operation.reputationOnSuccess?.business || 0);
     addGeneralReputation(state, "faction", operation.reputationOnSuccess?.faction || 0);
+    state.gang.gangReputation = state.player.reputation.faction;
+    state.gang.streetReputation = state.player.reputation.street;
+    state.gang.rankProgress += 2;
     addNotification(state, "Event", `${operation.name} succeeded.`, "success");
   } else {
     adjustWanted(state, operation.wantedOnFail || 1);
     state.player.health = clamp(state.player.health + (operation.healthOnFail || -8), 0, 100);
     addXP(state, Math.max(6, Math.round(operation.rewardXp * 0.35)));
+    state.gang.loyalty = Math.max(0, (state.gang.loyalty || 0) - 1);
     addNotification(state, "Event", `${operation.name} failed. Heat increased.`, "error");
   }
 
@@ -3202,6 +3910,7 @@ export function performPrisonAction(state, actionId) {
 }
 
 export function requestCredit(state, amount = BALANCE.credit.minRequest) {
+  ensureStage4State(state);
   const min = BALANCE.credit.minRequest;
   const requestAmount = Math.max(min, Math.round(Number(amount) || min));
   state.credit.creditLimit = stateCreditLimitForLevel(state.player.level);
@@ -3211,12 +3920,17 @@ export function requestCredit(state, amount = BALANCE.credit.minRequest) {
     return state;
   }
   state.credit.debt += requestAmount;
+  state.credit.totalBorrowed += requestAmount;
+  state.credit.lastPaymentDay = state.time.day;
+  if (state.credit.debt / Math.max(1, state.credit.creditLimit) > 0.7) state.credit.creditReputation = clamp(state.credit.creditReputation - 2, 5, 100);
   addWallet(state, requestAmount, "credit", "Credit payout", "income");
+  recalcEconomySnapshot(state);
   addNotification(state, "Economy", `Credit approved: $${requestAmount}.`, "success");
   return state;
 }
 
 export function repayCredit(state, amount = BALANCE.credit.minRepay) {
+  ensureStage4State(state);
   if (!state.credit.debt) {
     addNotification(state, "Economy", "No outstanding debt.", "info");
     return state;
@@ -3228,6 +3942,15 @@ export function repayCredit(state, amount = BALANCE.credit.minRepay) {
     return state;
   }
   state.credit.debt = Math.max(0, state.credit.debt - payment);
+  state.credit.totalRepaid += payment;
+  state.credit.lastPaymentDay = state.time.day;
+  state.credit.creditReputation = clamp(state.credit.creditReputation + 2, 5, 100);
+  if (state.credit.interestAccrued > 0) {
+    const interestPart = Math.min(payment, state.credit.interestAccrued);
+    state.credit.interestAccrued -= interestPart;
+    state.credit.interestPaid += interestPart;
+  }
+  recalcEconomySnapshot(state);
   addNotification(state, "Economy", `Debt repaid: $${payment}.`, "success");
   return state;
 }
@@ -3400,4 +4123,14 @@ export function getJobs(state) {
 
 export function getCrimeOperations(state) {
   return state.crimeOperations;
+}
+
+export function getTerritories(state) {
+  ensureStage4State(state);
+  return state.territories;
+}
+
+export function getContacts(state) {
+  ensureStage4State(state);
+  return state.contacts;
 }

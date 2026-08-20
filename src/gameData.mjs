@@ -36,13 +36,15 @@ export const BALANCE = {
   },
   bank: {
     depositMinimum: 50,
-    withdrawMinimum: 50
+    withdrawMinimum: 50,
+    transferMinimum: 50
   },
   credit: {
     maxCreditByLevel: 1800,
     dailyInterestRate: 0.02,
     minRequest: 300,
-    minRepay: 100
+    minRepay: 100,
+    missedPaymentDays: 7
   },
   casino: {
     dailyBetLimit: 2000,
@@ -51,7 +53,11 @@ export const BALANCE = {
     payoutMultiplier: {
       coinFlip: 1,
       highLow: 1.2,
-      simpleDice: 1.5
+      simpleDice: 1.5,
+      dice: 1.4,
+      roulette: 1.8,
+      blackjack: 1.6,
+      slots: 2
     }
   },
   rewards: {
@@ -734,11 +740,15 @@ export const STARTER_INVENTORY = [
 ];
 
 export const VEHICLES = [
-  { id: "motorcycle-starter", name: "City Motorcycle", category: "Motorcycle", price: 0, speed: 3, travelCost: 60, status: "Operational", owned: true, travelTimeModifier: -0.2 },
-  { id: "sedan-classic", name: "Classic Sedan", category: "Sedan", price: 6200, speed: 2, travelCost: 70, status: "Operational", owned: false, travelTimeModifier: 0 },
-  { id: "suv-urban", name: "Urban SUV", category: "SUV", price: 9400, speed: 2, travelCost: 62, status: "Operational", owned: false, travelTimeModifier: -0.1 },
-  { id: "sports-raven", name: "Raven Sports", category: "Sports", price: 14000, speed: 4, travelCost: 54, status: "Operational", owned: false, travelTimeModifier: -0.3 },
-  { id: "luxury-aurum", name: "Aurum Luxury", category: "Luxury", price: 22000, speed: 4, travelCost: 48, status: "Operational", owned: false, travelTimeModifier: -0.35 }
+  { id: "motorcycle-starter", name: "City Motorcycle", category: "Motorcycle", price: 0, speed: 3, handling: 4, luxury: 1, durability: 2, storage: 1, prestige: 1, travelCost: 60, status: "Operational", owned: true, travelTimeModifier: -0.2, upgrades: { engine: 0, handling: 0, durability: 0, luxury: 0, storage: 0 } },
+  { id: "compact-orbit", name: "Orbit Compact", category: "Economy", price: 4800, speed: 2, handling: 2, luxury: 1, durability: 2, storage: 2, prestige: 1, travelCost: 74, status: "Operational", owned: false, travelTimeModifier: 0.1, upgrades: { engine: 0, handling: 0, durability: 0, luxury: 0, storage: 0 } },
+  { id: "sedan-classic", name: "Classic Sedan", category: "Sedan", price: 6200, speed: 2, handling: 3, luxury: 2, durability: 3, storage: 2, prestige: 2, travelCost: 70, status: "Operational", owned: false, travelTimeModifier: 0, upgrades: { engine: 0, handling: 0, durability: 0, luxury: 0, storage: 0 } },
+  { id: "suv-urban", name: "Urban SUV", category: "SUV", price: 9400, speed: 2, handling: 2, luxury: 2, durability: 4, storage: 3, prestige: 2, travelCost: 62, status: "Operational", owned: false, travelTimeModifier: -0.1, upgrades: { engine: 0, handling: 0, durability: 0, luxury: 0, storage: 0 } },
+  { id: "sports-raven", name: "Raven Sports", category: "Sports", price: 14000, speed: 4, handling: 4, luxury: 3, durability: 3, storage: 1, prestige: 3, travelCost: 54, status: "Operational", owned: false, travelTimeModifier: -0.3, upgrades: { engine: 0, handling: 0, durability: 0, luxury: 0, storage: 0 } },
+  { id: "luxury-aurum", name: "Aurum Luxury", category: "Luxury", price: 22000, speed: 4, handling: 4, luxury: 5, durability: 4, storage: 3, prestige: 5, travelCost: 48, status: "Operational", owned: false, travelTimeModifier: -0.35, upgrades: { engine: 0, handling: 0, durability: 0, luxury: 0, storage: 0 } },
+  { id: "supercar-meteor", name: "Meteor Supercar", category: "Supercar", price: 42000, speed: 5, handling: 5, luxury: 5, durability: 3, storage: 1, prestige: 6, travelCost: 42, status: "Operational", owned: false, travelTimeModifier: -0.45, upgrades: { engine: 0, handling: 0, durability: 0, luxury: 0, storage: 0 } },
+  { id: "van-mercury", name: "Mercury Van", category: "Van", price: 10800, speed: 2, handling: 2, luxury: 1, durability: 4, storage: 5, prestige: 1, travelCost: 68, status: "Operational", owned: false, travelTimeModifier: -0.05, upgrades: { engine: 0, handling: 0, durability: 0, luxury: 0, storage: 0 } },
+  { id: "special-shadow", name: "Shadow Special", category: "Special Vehicles", price: 54000, speed: 4, handling: 5, luxury: 4, durability: 5, storage: 4, prestige: 6, travelCost: 45, status: "Operational", owned: false, travelTimeModifier: -0.4, upgrades: { engine: 0, handling: 0, durability: 0, luxury: 0, storage: 0 } }
 ];
 
 export const PROPERTIES = [
@@ -857,21 +867,27 @@ export const PROPERTIES = [
 ];
 
 export const BUSINESSES = [
-  { id: "biz-nightclub", name: "Nightclub", type: "Nightclub", purchasePrice: 28000, income: 1800, expenses: 600, reputation: 0, level: 1, employees: 6, owned: false, lastCollectedDay: 0 },
-  { id: "biz-restaurant", name: "Restaurant", type: "Restaurant", purchasePrice: 22000, income: 1450, expenses: 520, reputation: 0, level: 1, employees: 5, owned: false, lastCollectedDay: 0 },
-  { id: "biz-garage", name: "Garage", type: "Garage", purchasePrice: 19000, income: 1200, expenses: 460, reputation: 0, level: 1, employees: 4, owned: false, lastCollectedDay: 0 },
-  { id: "biz-casino", name: "Casino", type: "Casino", purchasePrice: 52000, income: 3200, expenses: 1200, reputation: 0, level: 1, employees: 10, owned: false, lastCollectedDay: 0 },
-  { id: "biz-security", name: "Security Company", type: "Security Company", purchasePrice: 26000, income: 1500, expenses: 620, reputation: 0, level: 1, employees: 5, owned: false, lastCollectedDay: 0 },
-  { id: "biz-warehouse", name: "Warehouse", type: "Warehouse", purchasePrice: 24000, income: 1650, expenses: 640, reputation: 0, level: 1, employees: 5, owned: false, lastCollectedDay: 0 },
-  { id: "biz-luxury-shop", name: "Luxury Shop", type: "Luxury Shop", purchasePrice: 30000, income: 2100, expenses: 820, reputation: 0, level: 1, employees: 6, owned: false, lastCollectedDay: 0 }
+  { id: "biz-cafe", name: "Cafe", type: "Cafe", location: "old-town", purchasePrice: 14500, income: 850, expenses: 300, reputation: 0, level: 1, employees: 3, security: 1, upgradeSlots: 2, status: "operational", owned: false, lastCollectedDay: 0 },
+  { id: "biz-restaurant", name: "Restaurant", type: "Restaurant", location: "downtown", purchasePrice: 22000, income: 1450, expenses: 520, reputation: 0, level: 1, employees: 5, security: 2, upgradeSlots: 3, status: "operational", owned: false, lastCollectedDay: 0 },
+  { id: "biz-nightclub", name: "Nightclub", type: "Nightclub", location: "underground", purchasePrice: 28000, income: 1800, expenses: 600, reputation: 0, level: 1, employees: 6, security: 2, upgradeSlots: 3, status: "operational", owned: false, lastCollectedDay: 0 },
+  { id: "biz-bar", name: "Bar", type: "Bar", location: "old-town", purchasePrice: 17800, income: 1100, expenses: 420, reputation: 0, level: 1, employees: 4, security: 1, upgradeSlots: 2, status: "operational", owned: false, lastCollectedDay: 0 },
+  { id: "biz-clothing", name: "Clothing Store", type: "Clothing Store", location: "downtown", purchasePrice: 19500, income: 1300, expenses: 480, reputation: 0, level: 1, employees: 4, security: 1, upgradeSlots: 3, status: "operational", owned: false, lastCollectedDay: 0 },
+  { id: "biz-dealership", name: "Car Dealership", type: "Car Dealership", location: "business-district", purchasePrice: 36000, income: 2400, expenses: 980, reputation: 0, level: 1, employees: 7, security: 3, upgradeSlots: 3, status: "operational", owned: false, lastCollectedDay: 0 },
+  { id: "biz-garage", name: "Garage", type: "Garage", location: "harbor", purchasePrice: 19000, income: 1200, expenses: 460, reputation: 0, level: 1, employees: 4, security: 2, upgradeSlots: 3, status: "operational", owned: false, lastCollectedDay: 0 },
+  { id: "biz-hotel", name: "Hotel", type: "Hotel", location: "downtown", purchasePrice: 34000, income: 2200, expenses: 900, reputation: 0, level: 1, employees: 8, security: 3, upgradeSlots: 4, status: "operational", owned: false, lastCollectedDay: 0 },
+  { id: "biz-salon", name: "Beauty Salon", type: "Beauty Salon", location: "residential", purchasePrice: 17200, income: 980, expenses: 360, reputation: 0, level: 1, employees: 4, security: 1, upgradeSlots: 2, status: "operational", owned: false, lastCollectedDay: 0 },
+  { id: "biz-security", name: "Security Company", type: "Security Company", location: "industrial", purchasePrice: 26000, income: 1500, expenses: 620, reputation: 0, level: 1, employees: 5, security: 4, upgradeSlots: 3, status: "operational", owned: false, lastCollectedDay: 0 },
+  { id: "biz-entertainment", name: "Entertainment Venue", type: "Entertainment Venue", location: "nightlife", purchasePrice: 32000, income: 2300, expenses: 860, reputation: 0, level: 1, employees: 7, security: 3, upgradeSlots: 4, status: "operational", owned: false, lastCollectedDay: 0 },
+  { id: "biz-realestate", name: "Real Estate Company", type: "Real Estate Company", location: "business-district", purchasePrice: 38000, income: 2500, expenses: 1000, reputation: 0, level: 1, employees: 6, security: 2, upgradeSlots: 4, status: "operational", owned: false, lastCollectedDay: 0 },
+  { id: "biz-luxury-shop", name: "Luxury Store", type: "Luxury Store", location: "rich-district", purchasePrice: 30000, income: 2100, expenses: 820, reputation: 0, level: 1, employees: 6, security: 2, upgradeSlots: 3, status: "operational", owned: false, lastCollectedDay: 0 }
 ];
 
 export const FACTIONS = [
-  { id: "royals", name: "Old Money", description: "Generational capital controlling elite contracts.", influence: 80, reputation: 0, members: ["npc-investor-2", "npc-security-boss-2"], headquarters: "faction-headquarters" },
-  { id: "black-harbor", name: "Harbor Crew", description: "Dock authority in all but name.", influence: 66, reputation: 0, members: ["npc-faction-member-1", "npc-mechanic-1"], headquarters: "docks" },
-  { id: "velvet-syndicate", name: "Black Roses", description: "Luxury-night influence network.", influence: 72, reputation: 0, members: ["npc-nightclub-owner-1", "npc-casino-manager-1"], headquarters: "luxury-club" },
-  { id: "iron-wolves", name: "The Kings", description: "Industrial enforcers and security operators.", influence: 64, reputation: 0, members: ["npc-security-boss-1", "npc-faction-member-2"], headquarters: "factory" },
-  { id: "old-guard", name: "La Familia", description: "Traditionalists with deep political ties.", influence: 70, reputation: 0, members: ["npc-banker-1", "npc-journalist-1"], headquarters: "bank" }
+  { id: "the-kings", name: "The Kings", description: "Industrial enforcers and security operators.", influence: 64, reputation: 0, members: ["npc-security-boss-1", "npc-faction-member-2"], headquarters: "factory" },
+  { id: "black-roses", name: "Black Roses", description: "Luxury-night influence network.", influence: 72, reputation: 0, members: ["npc-nightclub-owner-1", "npc-casino-manager-1"], headquarters: "luxury-club" },
+  { id: "iron-wolves", name: "Iron Wolves", description: "Harbor-backed force with logistics control.", influence: 66, reputation: 0, members: ["npc-faction-member-1", "npc-mechanic-1"], headquarters: "docks" },
+  { id: "los-santos", name: "Los Santos", description: "Traditionalists with deep political ties.", influence: 70, reputation: 0, members: ["npc-banker-1", "npc-journalist-1"], headquarters: "bank" },
+  { id: "the-syndicate", name: "The Syndicate", description: "Generational capital controlling elite contracts.", influence: 80, reputation: 0, members: ["npc-investor-2", "npc-security-boss-2"], headquarters: "faction-headquarters" }
 ];
 
 export const NPCS = [
@@ -883,7 +899,7 @@ export const NPCS = [
     location: "bar",
     personality: "charming",
     relationship: 0,
-    faction: "old-guard",
+    faction: "los-santos",
     dialogue: ["The city hears everything before sunrise.", "You buy trust one conversation at a time."],
     availableActions: ["talk", "socialize", "help", "give-gift", "work-together"]
   },
@@ -895,7 +911,7 @@ export const NPCS = [
     location: "garage",
     personality: "pragmatic",
     relationship: 0,
-    faction: "black-harbor",
+    faction: "iron-wolves",
     dialogue: ["Speed is expensive. Reliability is priceless."],
     availableActions: ["talk", "help", "work-together", "give-gift"]
   },
@@ -907,7 +923,7 @@ export const NPCS = [
     location: "bank",
     personality: "calm",
     relationship: 0,
-    faction: "old-guard",
+    faction: "los-santos",
     dialogue: ["A ledger never forgets.", "Keep your cash moving with intent."],
     availableActions: ["talk", "socialize", "work-together", "complete-quest"]
   },
@@ -919,7 +935,7 @@ export const NPCS = [
     location: "restaurant",
     personality: "warm",
     relationship: 0,
-    faction: "velvet-syndicate",
+    faction: "black-roses",
     dialogue: ["Good food opens more doors than threats."],
     availableActions: ["talk", "socialize", "help", "work-together"]
   },
@@ -931,7 +947,7 @@ export const NPCS = [
     location: "underground-club",
     personality: "ambitious",
     relationship: 0,
-    faction: "velvet-syndicate",
+    faction: "black-roses",
     dialogue: ["In this city, rhythm is power."],
     availableActions: ["talk", "socialize", "work-together", "complete-quest"]
   },
@@ -955,7 +971,7 @@ export const NPCS = [
     location: "restaurant",
     personality: "curious",
     relationship: 0,
-    faction: "old-guard",
+    faction: "los-santos",
     dialogue: ["Everyone has a story. Few can afford mine."],
     availableActions: ["talk", "socialize", "help", "give-gift"]
   },
@@ -967,7 +983,7 @@ export const NPCS = [
     location: "docks",
     personality: "strict",
     relationship: 0,
-    faction: "old-guard",
+    faction: "los-santos",
     dialogue: ["Keep your name clean or keep moving."],
     availableActions: ["talk", "help", "complete-quest"]
   },
@@ -979,7 +995,7 @@ export const NPCS = [
     location: "warehouse",
     personality: "bold",
     relationship: 0,
-    faction: "black-harbor",
+    faction: "iron-wolves",
     dialogue: ["Prove yourself and doors open."],
     availableActions: ["talk", "work-together", "complete-quest"]
   },
@@ -991,7 +1007,7 @@ export const NPCS = [
     location: "luxury-club",
     personality: "strategic",
     relationship: 0,
-    faction: "royals",
+    faction: "the-syndicate",
     dialogue: ["Risk is acceptable when it is priced correctly."],
     availableActions: ["talk", "socialize", "work-together", "give-gift"]
   },
@@ -1003,7 +1019,7 @@ export const NPCS = [
     location: "market",
     personality: "resourceful",
     relationship: 0,
-    faction: "black-harbor",
+    faction: "iron-wolves",
     dialogue: ["Need something? I can find it."],
     availableActions: ["talk", "socialize", "help", "give-gift"]
   },
@@ -1015,7 +1031,7 @@ export const NPCS = [
     location: "private-casino",
     personality: "precise",
     relationship: 0,
-    faction: "velvet-syndicate",
+    faction: "black-roses",
     dialogue: ["Balance the odds, never your emotions."],
     availableActions: ["talk", "socialize", "work-together", "complete-quest"]
   },
@@ -1027,7 +1043,7 @@ export const NPCS = [
     location: "hotel",
     personality: "professional",
     relationship: 0,
-    faction: "royals",
+    faction: "the-syndicate",
     dialogue: ["A city of secrets requires excellent hospitality."],
     availableActions: ["talk", "help", "work-together"]
   },
@@ -1051,7 +1067,7 @@ export const NPCS = [
     location: "underground-club",
     personality: "mysterious",
     relationship: 0,
-    faction: "velvet-syndicate",
+    faction: "black-roses",
     dialogue: ["You are one favor away from power."],
     availableActions: ["talk", "socialize", "help", "work-together", "complete-quest"]
   },
@@ -1063,7 +1079,7 @@ export const NPCS = [
     location: "factory",
     personality: "analytical",
     relationship: 0,
-    faction: "royals",
+    faction: "the-syndicate",
     dialogue: ["Growth starts with disciplined spending."],
     availableActions: ["talk", "socialize", "work-together"]
   },
@@ -1075,7 +1091,7 @@ export const NPCS = [
     location: "mansion",
     personality: "elite",
     relationship: 0,
-    faction: "royals",
+    faction: "the-syndicate",
     dialogue: ["Influence compounds, just like capital."],
     availableActions: ["talk", "socialize", "give-gift", "complete-quest"]
   },
@@ -1099,7 +1115,7 @@ export const NPCS = [
     location: "garage",
     personality: "direct",
     relationship: 0,
-    faction: "black-harbor",
+    faction: "iron-wolves",
     dialogue: ["Tools first, ego last."],
     availableActions: ["talk", "help", "work-together"]
   },
@@ -1135,7 +1151,7 @@ export const NPCS = [
     location: "legal-office",
     personality: "precise",
     relationship: 0,
-    faction: "old-guard",
+    faction: "los-santos",
     dialogue: ["A clean contract saves more than a loaded weapon."],
     availableActions: ["talk", "help", "work-together"]
   },
@@ -1147,7 +1163,7 @@ export const NPCS = [
     location: "service-garage",
     personality: "composed",
     relationship: 0,
-    faction: "black-harbor",
+    faction: "iron-wolves",
     dialogue: ["Keep your people healthy and your operation survives."],
     availableActions: ["talk", "help", "give-gift"]
   },
@@ -1159,7 +1175,7 @@ export const NPCS = [
     location: "shopping-area",
     personality: "confident",
     relationship: 0,
-    faction: "royals",
+    faction: "the-syndicate",
     dialogue: ["Presentation is leverage in silk form."],
     availableActions: ["talk", "socialize", "give-gift"]
   },
@@ -1171,7 +1187,7 @@ export const NPCS = [
     location: "small-businesses",
     personality: "careful",
     relationship: 0,
-    faction: "old-guard",
+    faction: "los-santos",
     dialogue: ["Margins are thin. Trust is priceless."],
     availableActions: ["talk", "help", "work-together"]
   },
@@ -1183,7 +1199,7 @@ export const NPCS = [
     location: "business-hub",
     personality: "organized",
     relationship: 0,
-    faction: "royals",
+    faction: "the-syndicate",
     dialogue: ["Location and timing decide everything in this city."],
     availableActions: ["talk", "socialize", "work-together"]
   },
@@ -1195,7 +1211,7 @@ export const NPCS = [
     location: "driver-hub",
     personality: "fast-thinking",
     relationship: 0,
-    faction: "black-harbor",
+    faction: "iron-wolves",
     dialogue: ["I know shortcuts nobody writes down."],
     availableActions: ["talk", "help", "work-together", "complete-quest"]
   },
@@ -1207,7 +1223,7 @@ export const NPCS = [
     location: "office-complex",
     personality: "efficient",
     relationship: 0,
-    faction: "royals",
+    faction: "the-syndicate",
     dialogue: ["Calendars move cities more than rumors do."],
     availableActions: ["talk", "socialize", "help"]
   },
@@ -1219,7 +1235,7 @@ export const NPCS = [
     location: "office-complex",
     personality: "sharp",
     relationship: 0,
-    faction: "royals",
+    faction: "the-syndicate",
     dialogue: ["Capital rewards discipline, not noise."],
     availableActions: ["talk", "socialize", "work-together", "give-gift"]
   }

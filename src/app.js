@@ -1,6 +1,7 @@
 import { DISTRICTS, LOCATIONS, TITLE_RANKS } from "./gameData.mjs";
 import {
   bankDeposit,
+  bankTransfer,
   bankWithdraw,
   buyMarketItem,
   buyProperty,
@@ -25,6 +26,7 @@ import {
   getBusinesses,
   getCurrentLocation,
   getCrimeOperations,
+  getContacts,
   getFactionList,
   getFamilyOverview,
   getInventoryEntries,
@@ -32,6 +34,7 @@ import {
   getNpcsAtLocation,
   getProperties,
   getSelectedDistrict,
+  getTerritories,
   interactWithNpc,
   markAllNotificationsRead,
   markNotificationRead,
@@ -44,6 +47,7 @@ import {
   performPrisonAction,
   payRent,
   repayCredit,
+  repairVehicle,
   rentProperty,
   requestCredit,
   resetGame,
@@ -51,11 +55,16 @@ import {
   runBusinessAction,
   runCrimeOperation,
   runFactionAction,
+  runTerritoryAction,
   runJobAction,
   safehouseRecoverEnergy,
   safehouseRest,
   sellMarketItem,
+  sellVehicle,
+  storeVehicle,
   startDateWithNpc,
+  upgradeProperty,
+  upgradeVehicle,
   hostSocialEvent,
   proposeToNpc,
   toggleDebugMode,
@@ -561,6 +570,19 @@ function renderProfile() {
       </div>
     </section>
     <section class="card">
+      <h3>${t(state, "stage4.status", "Stage 4 Status")}</h3>
+      <div class="grid-2">
+        <div class="stat">${t(state, "stage4.wealth", "Wealth")}<strong>${currency(state.economy?.netWorth || 0)}</strong></div>
+        <div class="stat">${t(state, "stage4.businessPortfolio", "Business Portfolio")}<strong>${state.player.ownedBusinesses.length}</strong></div>
+        <div class="stat">Street / City Rep<strong>${rep.street}/${rep.city}</strong></div>
+        <div class="stat">${t(state, "stage4.gangRank", "Gang Rank")}<strong>${escapeHtml(state.gang?.rank || "Recruit")}</strong></div>
+        <div class="stat">Influence<strong>${state.player.influence}</strong></div>
+        <div class="stat">Wanted Status<strong>${state.player.wantedLevel}/5</strong></div>
+        <div class="stat">Lifestyle<strong>${escapeHtml(state.life?.lifestyle || "Comfortable")}</strong></div>
+        <div class="stat">${t(state, "stage4.familyWealth", "Family Wealth")}<strong>${currency(state.family?.legacy?.wealth || 0)}</strong></div>
+      </div>
+    </section>
+    <section class="card">
       <h3>Top Relationships</h3>
       <div class="grid-2">${relationshipSnippet()}</div>
     </section>
@@ -697,10 +719,16 @@ function renderInventory() {
       (vehicle) => `
       <article class="card${vehicle.id === state.player.currentVehicleId ? " active-location" : ""}">
         <h4>${escapeHtml(vehicle.name)}</h4>
-        <p class="muted">${escapeHtml(vehicle.category)} · Speed ${vehicle.speed} · Travel ${currency(vehicle.travelCost)}</p>
+        <p class="muted">${escapeHtml(vehicle.category)} · Speed ${vehicle.speed} · Handling ${vehicle.handling || 0} · Durability ${vehicle.durability || 0}</p>
+        <p class="muted">Luxury ${vehicle.luxury || 0} · Storage ${vehicle.storage || 0} · Prestige ${vehicle.prestige || 0}</p>
         <div class="actions">
           ${vehicle.owned ? "" : `<button data-action="buy-vehicle" data-vehicle-id="${vehicle.id}">Buy ${currency(vehicle.price)}</button>`}
           ${vehicle.owned ? `<button data-action="select-vehicle" data-vehicle-id="${vehicle.id}">Select</button>` : ""}
+          ${vehicle.owned ? `<button data-action="repair-vehicle" data-vehicle-id="${vehicle.id}">${t(state, "stage4.repair", "Repair")}</button>` : ""}
+          ${vehicle.owned ? `<button data-action="vehicle-upgrade" data-vehicle-id="${vehicle.id}" data-upgrade-category="engine">${t(state, "stage4.engineUp", "Engine+")}</button>` : ""}
+          ${vehicle.owned ? `<button data-action="vehicle-upgrade" data-vehicle-id="${vehicle.id}" data-upgrade-category="luxury">${t(state, "stage4.luxuryUp", "Luxury+")}</button>` : ""}
+          ${vehicle.owned ? `<button data-action="store-vehicle" data-vehicle-id="${vehicle.id}">${t(state, "stage4.store", "Store")}</button>` : ""}
+          ${vehicle.owned ? `<button data-action="sell-vehicle" data-vehicle-id="${vehicle.id}">${t(state, "stage4.sell", "Sell")}</button>` : ""}
         </div>
       </article>
     `
@@ -718,6 +746,8 @@ function renderInventory() {
         <div class="actions">
           ${property.owned ? "" : `<button data-action="buy-property" data-property-id="${property.id}">Buy</button>`}
           ${property.owned ? "" : `<button data-action="rent-property" data-property-id="${property.id}" data-rent-mode="weekly">Rent Weekly</button>`}
+          ${property.owned ? `<button data-action="upgrade-property" data-property-id="${property.id}" data-property-upgrade="security">Security+</button>` : ""}
+          ${property.owned ? `<button data-action="upgrade-property" data-property-id="${property.id}" data-property-upgrade="luxury">Luxury+</button>` : ""}
         </div>
       </article>
     `
@@ -728,9 +758,12 @@ function renderInventory() {
     <section class="card marble">
       <h2>Inventory · Market · Assets</h2>
       <p class="muted">Cash ${currency(state.player.money)} · Bank ${currency(state.player.bankBalance)}</p>
+      <p class="muted">${t(state, "stage4.garage", "Garage")} ${state.garage?.storedVehicleIds?.length || 0}/${state.garage?.capacity || 2} · ${t(state, "stage4.netWorth", "Net Worth")} ${currency(state.economy?.netWorth || 0)}</p>
       <div class="actions">
         <button data-action="bank-deposit" data-amount="200">Deposit $200</button>
         <button data-action="bank-withdraw" data-amount="200">Withdraw $200</button>
+        <button data-action="bank-transfer" data-transfer-target="family" data-amount="150">${t(state, "stage4.transferFamily", "Transfer Family")} $150</button>
+        <button data-action="bank-transfer" data-transfer-target="business" data-amount="200">${t(state, "stage4.transferBusiness", "Transfer Business")} $200</button>
         <button data-action="pay-rent">Pay Rent</button>
         <button data-action="select-vehicle">Cycle Vehicle</button>
       </div>
@@ -801,10 +834,14 @@ function renderQuests() {
       <article class="card">
         <h4>${escapeHtml(business.name)} ${business.owned ? "(Owned)" : ""}</h4>
         <p class="muted">${escapeHtml(business.type)} · Level ${business.level} · Rep ${business.reputation}</p>
-        <p class="muted">Income ${currency(business.income)} · Expenses ${currency(business.expenses)} · Employees ${business.employees}</p>
+        <p class="muted">Income ${currency(business.income)} · Expenses ${currency(business.expenses)} · Employees ${business.employees} · Security ${business.security || 0}</p>
         <div class="actions">
           <button data-action="business-action" data-business-id="${business.id}">${business.owned ? "Collect Income" : `Purchase ${currency(business.purchasePrice)}`}</button>
           ${business.owned ? `<button data-action="business-upgrade" data-business-id="${business.id}">Upgrade</button>` : ""}
+          ${business.owned ? `<button data-action="business-hire" data-business-id="${business.id}">${t(state, "stage4.hire", "Hire")}</button>` : ""}
+          ${business.owned ? `<button data-action="business-fire" data-business-id="${business.id}">${t(state, "stage4.fire", "Fire")}</button>` : ""}
+          ${business.owned ? `<button data-action="business-security" data-business-id="${business.id}">${t(state, "stage4.security", "Security")}</button>` : ""}
+          ${business.owned ? `<button data-action="business-sell" data-business-id="${business.id}">${t(state, "stage4.sell", "Sell")}</button>` : ""}
         </div>
       </article>
     `
@@ -817,10 +854,42 @@ function renderQuests() {
       <article class="card">
         <h4>${escapeHtml(faction.name)}</h4>
         <p class="muted">${escapeHtml(faction.description)}</p>
-        <p class="muted">Influence ${faction.influence} · Your Rep ${state.player.factionReputation[faction.id] || 0}</p>
+        <p class="muted">Influence ${faction.influence} · Your Rep ${state.player.factionReputation[faction.id] || 0} · Rank ${escapeHtml(state.gang?.currentFactionId === faction.id ? state.gang.rank : "—")}</p>
         <div class="actions">
           <button data-action="faction-action" data-faction-id="${faction.id}">Faction Activity</button>
+          <button data-action="faction-join" data-faction-id="${faction.id}">${t(state, "stage4.join", "Join")}</button>
+          <button data-action="faction-leave" data-faction-id="${faction.id}">${t(state, "stage4.leave", "Leave")}</button>
         </div>
+      </article>
+    `
+    )
+    .join("");
+
+  const territoryCards = getTerritories(state)
+    .map(
+      (territory) => `
+      <article class="card">
+        <h4>${escapeHtml(territory.districtId.toUpperCase())}</h4>
+        <p class="muted">Owner ${escapeHtml(territory.ownerFactionId || "none")} · Influence ${territory.influence} · Danger ${territory.danger} · Wealth ${territory.wealth}</p>
+        <div class="actions">
+          <button data-action="territory-action" data-district-id="${territory.districtId}" data-territory-mode="scout">${t(state, "stage4.scout", "Scout")}</button>
+          <button data-action="territory-action" data-district-id="${territory.districtId}" data-territory-mode="build-influence">${t(state, "stage4.buildInfluence", "Build Influence")}</button>
+          <button data-action="territory-action" data-district-id="${territory.districtId}" data-territory-mode="support-faction">${t(state, "stage4.support", "Support")}</button>
+          <button data-action="territory-action" data-district-id="${territory.districtId}" data-territory-mode="challenge-rival">${t(state, "stage4.challenge", "Challenge")}</button>
+        </div>
+      </article>
+    `
+    )
+    .join("");
+
+  const contacts = Object.values(getContacts(state))
+    .slice(0, 10)
+    .map(
+      (contact) => `
+      <article class="card">
+        <h4>${escapeHtml(contact.name)}</h4>
+        <p class="muted">${escapeHtml(contact.role)} · ${escapeHtml(contact.district)} · Trust ${contact.trust} · Influence ${contact.influence}</p>
+        <p class="muted">${escapeHtml((contact.services || []).join(", "))}</p>
       </article>
     `
     )
@@ -915,6 +984,7 @@ function renderQuests() {
     <section class="card">
       <h3>Credit / Loan Foundation</h3>
       <p class="muted">Debt ${currency(state.credit.debt)} · Limit ${currency(state.credit.creditLimit)} · Interest accrued ${currency(state.credit.interestAccrued)}</p>
+      <p class="muted">${t(state, "stage4.creditRep", "Credit Reputation")} ${state.credit.creditReputation || 0} · Borrowed ${currency(state.credit.totalBorrowed || 0)} · Repaid ${currency(state.credit.totalRepaid || 0)}</p>
       <div class="actions">
         <button data-action="credit-request" data-amount="500">Request $500</button>
         <button data-action="credit-repay" data-amount="300">Repay $300</button>
@@ -973,12 +1043,17 @@ function renderQuests() {
         <button data-action="casino-play" data-game="coinFlip">Coin Flip</button>
         <button data-action="casino-play" data-game="highLow">High / Low</button>
         <button data-action="casino-play" data-game="simpleDice">Simple Dice</button>
+        <button data-action="casino-play" data-game="dice">Dice</button>
+        <button data-action="casino-play" data-game="roulette">Roulette</button>
+        <button data-action="casino-play" data-game="blackjack">Blackjack</button>
+        <button data-action="casino-play" data-game="slots">Slots</button>
         <button data-action="mark-all-notes">Mark Notifications Read</button>
         <button data-action="return-city">Return City</button>
         <button data-action="upgrade-safehouse">Upgrade Safehouse</button>
         <button data-action="reset-game">Reset Game</button>
         ${debugActive ? "" : '<button data-action="debug-on">Enable Debug</button>'}
       </div>
+      <p class="muted">${t(state, "stage4.vip", "Casino VIP")}: ${escapeHtml(state.casinoProgress?.vipLevel || "Regular")} · ${t(state, "stage4.bet", "Bet")} ${currency(state.casinoProgress?.totalBet || 0)} · ${t(state, "stage4.net", "Net")} ${currency((state.casinoProgress?.totalWon || 0) - (state.casinoProgress?.totalLost || 0))}</p>
     </section>
     ${prisonPanel}
     ${creditPanel}
@@ -1013,6 +1088,8 @@ function renderQuests() {
     <section class="card"><h3>Operations</h3>${operations}</section>
     <section class="card"><h3>Businesses</h3>${businesses}</section>
     <section class="card"><h3>Factions</h3>${factions}</section>
+    <section class="card"><h3>${t(state, "stage4.territories", "Territories")}</h3>${territoryCards}</section>
+    <section class="card"><h3>${t(state, "stage4.contacts", "Contacts")}</h3>${contacts}</section>
     <section class="card"><h3>Bank Transactions</h3>${transactions || '<p class="muted">No transactions yet.</p>'}</section>
     <section class="card"><h3>Notification Center</h3>${notifications || '<p class="muted">No notifications.</p>'}</section>
     ${debugPanel}
@@ -1154,7 +1231,11 @@ root.addEventListener("click", (event) => {
     outfitPreset,
     eventType,
     familyMemberId,
-    familyInteraction
+    familyInteraction,
+    transferTarget,
+    upgradeCategory,
+    propertyUpgrade,
+    territoryMode
   } = button.dataset;
   try {
     if (action === "create-player") {
@@ -1243,21 +1324,34 @@ root.addEventListener("click", (event) => {
     if (action === "cool-heat") coolDistrictHeat(state, districtId || state.selectedDistrictId);
     if (action === "bank-deposit") bankDeposit(state, Number(amount || 200));
     if (action === "bank-withdraw") bankWithdraw(state, Number(amount || 200));
+    if (action === "bank-transfer") bankTransfer(state, transferTarget || "family", Number(amount || 150));
     if (action === "use-item") useInventoryItem(state, itemId);
     if (action === "buy-item") buyMarketItem(state, itemId, Number(price));
     if (action === "sell-item") sellMarketItem(state, itemId, Number(price));
     if (action === "buy-vehicle") buyVehicle(state, vehicleId);
+    if (action === "repair-vehicle") repairVehicle(state, vehicleId);
+    if (action === "vehicle-upgrade") upgradeVehicle(state, vehicleId, upgradeCategory || "engine");
+    if (action === "sell-vehicle") sellVehicle(state, vehicleId);
+    if (action === "store-vehicle") storeVehicle(state, vehicleId);
     if (action === "select-vehicle" && vehicleId) state.player.currentVehicleId = vehicleId;
     if (action === "select-vehicle" && !vehicleId) cycleVehicle(state);
     if (action === "npc-action") interactWithNpc(state, npcId, npcInteraction);
     if (action === "business-action") runBusinessAction(state, businessId);
     if (action === "business-upgrade") runBusinessAction(state, businessId, "upgrade");
+    if (action === "business-hire") runBusinessAction(state, businessId, "hire");
+    if (action === "business-fire") runBusinessAction(state, businessId, "fire");
+    if (action === "business-security") runBusinessAction(state, businessId, "security");
+    if (action === "business-sell") runBusinessAction(state, businessId, "sell");
     if (action === "buy-property") buyProperty(state, propertyId);
     if (action === "rent-property") rentProperty(state, propertyId, rentMode || "weekly");
+    if (action === "upgrade-property") upgradeProperty(state, propertyId, propertyUpgrade || "security");
     if (action === "pay-rent") payRent(state);
     if (action === "life-activity") performLifeActivity(state, lifeActivity);
     if (action === "outfit") changeOutfit(state, outfitPreset);
     if (action === "faction-action") runFactionAction(state, factionId);
+    if (action === "faction-join") runFactionAction(state, factionId, "join");
+    if (action === "faction-leave") runFactionAction(state, factionId, "leave");
+    if (action === "territory-action") runTerritoryAction(state, districtId || state.selectedDistrictId, territoryMode || "scout");
     if (action === "job-action") runJobAction(state, jobId);
     if (action === "date-npc") startDateWithNpc(state, npcId, locationId || "restaurant");
     if (action === "propose-npc") proposeToNpc(state, npcId);

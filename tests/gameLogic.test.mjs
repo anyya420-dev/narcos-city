@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  bankTransfer,
   bankDeposit,
   buyMarketItem,
   buyProperty,
@@ -22,15 +23,21 @@ import {
   performPrisonAction,
   repayCredit,
   requestCredit,
+  repairVehicle,
   rentProperty,
   runBusinessAction,
   runCrimeOperation,
   runFactionAction,
+  runTerritoryAction,
   runJobAction,
+  sellVehicle,
+  storeVehicle,
   startDateWithNpc,
   hostSocialEvent,
   proposeToNpc,
   safehouseRest,
+  upgradeProperty,
+  upgradeVehicle,
   performLifeActivity,
   performFamilyInteraction,
   payRent,
@@ -130,7 +137,7 @@ test("faction and wanted systems are actionable", () => {
   const state = createInitialState();
   createPlayer(state, "Rico");
   state.player.energy = 100;
-  runFactionAction(state, "royals");
+  runFactionAction(state, "the-syndicate");
   assert.ok(state.player.reputation.faction > 0);
 
   state.player.wantedLevel = 3;
@@ -196,6 +203,71 @@ test("credit and prison systems are actionable", () => {
   state.prison.remainingTurns = 2;
   performPrisonAction(state, "serve-turn");
   assert.ok(state.prison.remainingTurns <= 1);
+});
+
+test("bank transfer and credit reputation update in stage4 economy", () => {
+  const state = createInitialState();
+  createPlayer(state, "Rico");
+  state.player.money = 6000;
+  bankDeposit(state, 800);
+  const bankBefore = state.player.bankBalance;
+  bankTransfer(state, "family", 200);
+  assert.ok(state.player.bankBalance < bankBefore);
+  const repBefore = state.credit.creditReputation;
+  requestCredit(state, 500);
+  repayCredit(state, 300);
+  assert.ok(state.credit.creditReputation >= repBefore);
+});
+
+test("business staffing and security actions update owned business", () => {
+  const state = createInitialState();
+  createPlayer(state, "Rico");
+  state.player.money = 120000;
+  runBusinessAction(state, "biz-cafe");
+  const business = state.businesses.find((entry) => entry.id === "biz-cafe");
+  const staffBefore = business.staff.length;
+  runBusinessAction(state, "biz-cafe", "hire");
+  runBusinessAction(state, "biz-cafe", "security");
+  assert.ok(business.staff.length >= staffBefore);
+  assert.ok(business.security >= 1);
+});
+
+test("gang joining and territory actions influence district control loop", () => {
+  const state = createInitialState();
+  createPlayer(state, "Rico");
+  state.player.money = 50000;
+  runFactionAction(state, "the-kings", "join");
+  assert.equal(state.gang.currentFactionId, "the-kings");
+  runTerritoryAction(state, "old-town", "build-influence");
+  const territory = state.territories.find((entry) => entry.districtId === "old-town");
+  assert.ok(territory.playerInfluence > 0);
+});
+
+test("casino vip and vehicle garage upgrades persist through actions", () => {
+  const state = createInitialState();
+  createPlayer(state, "Rico");
+  state.player.money = 100000;
+  buyVehicle(state, "sedan-classic");
+  upgradeVehicle(state, "sedan-classic", "engine");
+  repairVehicle(state, "sedan-classic");
+  storeVehicle(state, "sedan-classic");
+  casinoPlay(state, "roulette", 400);
+  casinoPlay(state, "blackjack", 400);
+  assert.ok(state.casinoProgress.totalBet > 0);
+  assert.ok(state.garage.storedVehicleIds.includes("sedan-classic"));
+  sellVehicle(state, "sedan-classic");
+  assert.ok(!state.vehicles.find((entry) => entry.id === "sedan-classic").owned);
+});
+
+test("property upgrades and city economy state are tracked", () => {
+  const state = createInitialState();
+  createPlayer(state, "Rico");
+  state.player.money = 80000;
+  buyProperty(state, "apt-oldtown");
+  upgradeProperty(state, "apt-oldtown", "security");
+  const property = state.properties.find((entry) => entry.id === "apt-oldtown");
+  assert.ok(property.security >= 3);
+  assert.ok(state.cityEconomy.districts["old-town"]);
 });
 
 test("daily quest rewards can be claimed once completed", () => {
