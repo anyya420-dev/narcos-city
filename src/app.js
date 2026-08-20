@@ -245,8 +245,8 @@ function renderSetup() {
       <h2>NARCOS CITY — CHAPTER 1</h2>
       <p class="muted">${isRu ? "Город узнает ваше имя." : "The City Knows Your Name."}</p>
       <label class="field">
-        <span>${isRu ? "Имя персонажа" : "Character Name"}</span>
-        <input id="player-name-input" maxlength="24" placeholder="${isRu ? "Введите имя" : "Enter your name"}" />
+        <span>${t(state, "ui.characterName", "Character Name")}</span>
+        <input id="player-name-input" maxlength="24" placeholder="${t(state, "ui.enterName", "Enter your name")}" />
       </label>
       <div class="actions">
         <button data-action="create-player">${t(state, "menu.enter", "Enter City")}</button>
@@ -285,7 +285,7 @@ function renderMainMenu() {
         <h3>${t(state, "menu.create", "Create Character")}</h3>
         <p class="muted">Start as La Reina · Queen · Active</p>
         <label class="field">
-          <span>${isRu ? "Имя персонажа" : "Character Name"}</span>
+          <span>${t(state, "ui.characterName", "Character Name")}</span>
           <input id="player-name-input" maxlength="24" value="${escapeHtml(state.player.name || "La Reina")}" />
         </label>
         <div class="actions">
@@ -395,10 +395,10 @@ function renderCity() {
       <div id="city-world-3d-container" class="city-world-3d-container"></div>
     </section>
     <section class="city-quick-actions">
-      <button data-action="claim-daily">DAILY</button>
-      <button data-action="safehouse-rest">REST</button>
-      <button data-action="safehouse-energy">ENERGY</button>
-      <button data-action="menu-map">MAP</button>
+      <button data-action="claim-daily">${t(state, "hud.daily", "DAILY")}</button>
+      <button data-action="safehouse-rest">${t(state, "hud.rest", "REST")}</button>
+      <button data-action="safehouse-energy">${t(state, "hud.energy", "ENERGY")}</button>
+      <button data-action="menu-map">${t(state, "nav.map", "MAP")}</button>
     </section>
   `;
 
@@ -531,9 +531,9 @@ function renderDistricts() {
         <h3>${escapeHtml(district.name)}</h3>
         <p class="muted">${escapeHtml(district.description)}</p>
         <div class="grid-2">
-          <div class="stat">${isRu ? "Требование репутации" : "Reputation Req"}<strong>${district.reputationRequirement}</strong></div>
+          <div class="stat">${t(state, "ui.reputationReq", "Reputation Req")}<strong>${district.reputationRequirement}</strong></div>
           <div class="stat">${isRu ? "Стоимость поездки" : "Travel Cost"}<strong>${currency(travelCost)}</strong></div>
-          <div class="stat">${isRu ? "Время поездки" : "Travel Time"}<strong>${district.travelTime}</strong></div>
+          <div class="stat">${t(state, "ui.travelTime", "Travel Time")}<strong>${district.travelTime}</strong></div>
           <div class="stat">${isRu ? "Опасность/Богатство" : "Danger/Wealth"}<strong>${district.dangerLevel}/${district.wealthLevel}</strong></div>
         </div>
         <div class="actions">
@@ -546,7 +546,7 @@ function renderDistricts() {
 
   root.innerHTML = `
     <section class="card marble">
-      <h2>${isRu ? "Районы города" : "District Network"}</h2>
+      <h2>${t(state, "ui.districts", "District Network")}</h2>
       <p class="muted">${isRu ? "Путешествия меняют репутацию, риски и возможности." : "Travel reshapes reputation, risk, and opportunities."}</p>
     </section>
     ${renderDistrictMap()}
@@ -645,7 +645,7 @@ function renderProfile() {
         <div class="stat">${isRu ? "Репутация улица/город" : "Street / City Rep"}<strong>${rep.street}/${rep.city}</strong></div>
         <div class="stat">${t(state, "stage4.gangRank", isRu ? "Ранг в группировке" : "Gang Rank")}<strong>${escapeHtml(state.gang?.rank || (isRu ? "Новобранец" : "Recruit"))}</strong></div>
         <div class="stat">${PL.influence}<strong>${state.player.influence}</strong></div>
-        <div class="stat">${isRu ? "Статус розыска" : "Wanted Status"}<strong>${state.player.wantedLevel}/5</strong></div>
+        <div class="stat">${t(state, "ui.wantedStatus", "Wanted Status")}<strong>${state.player.wantedLevel}/5</strong></div>
         <div class="stat">${isRu ? "Образ жизни" : "Lifestyle"}<strong>${escapeHtml(state.life?.lifestyle || (isRu ? "Комфортный" : "Comfortable"))}</strong></div>
         <div class="stat">${t(state, "stage4.familyWealth", isRu ? "Богатство семьи" : "Family Wealth")}<strong>${currency(state.family?.legacy?.wealth || 0)}</strong></div>
       </div>
@@ -847,13 +847,13 @@ function renderInventory() {
         <button data-action="life-activity" data-life-activity="exercise">Exercise</button>
       </div>
       <div class="actions">
-        <button data-action="outfit" data-outfit-preset="Casual">Casual</button>
-        <button data-action="outfit" data-outfit-preset="Elegant">Elegant</button>
-        <button data-action="outfit" data-outfit-preset="Luxury">Luxury</button>
-        <button data-action="outfit" data-outfit-preset="Street">Street</button>
-        <button data-action="outfit" data-outfit-preset="Business">Business</button>
-        <button data-action="outfit" data-outfit-preset="Nightlife">Nightlife</button>
-        <button data-action="outfit" data-outfit-preset="Sport">Sport</button>
+        <button data-action="outfit" data-outfit-preset="Casual">${t(state, "ui.outfitCasual", "Casual")}</button>
+        <button data-action="outfit" data-outfit-preset="Elegant">${t(state, "ui.outfitElegant", "Elegant")}</button>
+        <button data-action="outfit" data-outfit-preset="Luxury">${t(state, "ui.outfitLuxury", "Luxury")}</button>
+        <button data-action="outfit" data-outfit-preset="Street">${t(state, "ui.outfitStreet", "Street")}</button>
+        <button data-action="outfit" data-outfit-preset="Business">${t(state, "ui.outfitBusiness", "Business")}</button>
+        <button data-action="outfit" data-outfit-preset="Nightlife">${t(state, "ui.outfitNightlife", "Nightlife")}</button>
+        <button data-action="outfit" data-outfit-preset="Sport">${t(state, "ui.outfitSport", "Sport")}</button>
       </div>
       <p class="muted">Current outfit: ${escapeHtml(state.life?.wardrobe?.currentPreset || "Casual")} · Residence: ${escapeHtml(state.life?.residence?.type || "None")} (${escapeHtml(state.life?.residence?.ownership || "None")})</p>
     </section>
@@ -998,7 +998,7 @@ function renderQuests() {
       <article class="card${quest.completed && !quest.claimed ? " active-location" : ""}">
         <h4>${escapeHtml(quest.title)}</h4>
         <p class="muted">${escapeHtml(quest.description)}</p>
-        <p class="muted">Progress: ${quest.progress}/${quest.objective.required} · ${quest.claimed ? "Claimed" : quest.completed ? "Ready" : "In Progress"}</p>
+        <p class="muted">${t(state, "ui.progress", "Progress")}: ${quest.progress}/${quest.objective.required} · ${quest.claimed ? t(state, "ui.claimed", "Claimed") : quest.completed ? t(state, "ui.ready", "Ready") : t(state, "ui.inProgress", "In Progress")}</p>
         <div class="actions">
           ${quest.completed && !quest.claimed ? `<button data-action="claim-daily-quest" data-quest-id="${quest.id}">Claim Reward</button>` : ""}
         </div>
@@ -1064,8 +1064,8 @@ function renderQuests() {
     <section class="card">
       <h3>Future Systems Foundation</h3>
       <p class="muted">Telegram: ${state.telegram.adapter} · Premium: ${state.premium.membership} · Admin Role: ${state.admin.role}</p>
-      <p class="muted">Social: ${state.social.friends.length} friends / ${state.social.followers} followers · Romance partner: ${state.relationshipsFoundation.partnerId || "None"}</p>
-      <p class="muted">Background population in district: ${(state.backgroundPopulation[state.selectedDistrictId] || []).map((entry) => entry.role).join(", ") || "None"}</p>
+      <p class="muted">${t(state, "ui.socialInfo", "Social")}: ${state.social.friends.length} ${t(state, "ui.friends", "friends")} / ${state.social.followers} ${t(state, "ui.followers", "followers")} · ${t(state, "ui.romanticPartner", "Romantic Partner")}: ${state.relationshipsFoundation.partnerId || "—"}</p>
+      <p class="muted">${t(state, "ui.districtPopulation", "District Population")}: ${(state.backgroundPopulation[state.selectedDistrictId] || []).map((entry) => entry.role).join(", ") || "—"}</p>
     </section>
   `;
 
@@ -1138,28 +1138,28 @@ function renderQuests() {
       ${socialCandidates || '<p class="muted">No social contacts available.</p>'}
     </section>
     <section class="card">
-      <h3>Finance Summary</h3>
+      <h3>${t(state, "ui.financeSummary", "Finance Summary")}</h3>
       <div class="grid-2">
-        <div class="stat">Weekly Income<strong>${currency(financeSummary.weeklyIncome || 0)}</strong></div>
-        <div class="stat">Weekly Expenses<strong>${currency(financeSummary.weeklyExpenses || 0)}</strong></div>
-        <div class="stat">Monthly Income<strong>${currency(financeSummary.monthlyIncome || 0)}</strong></div>
-        <div class="stat">Monthly Expenses<strong>${currency(financeSummary.monthlyExpenses || 0)}</strong></div>
-        <div class="stat">Housing Costs<strong>${currency(financeSummary.housingCosts || 0)}</strong></div>
-        <div class="stat">Avg Spend<strong>${currency(financeSummary.averageSpending || 0)}</strong></div>
+        <div class="stat">${t(state, "ui.weeklyIncome", "Weekly Income")}<strong>${currency(financeSummary.weeklyIncome || 0)}</strong></div>
+        <div class="stat">${t(state, "ui.weeklyExpenses", "Weekly Expenses")}<strong>${currency(financeSummary.weeklyExpenses || 0)}</strong></div>
+        <div class="stat">${t(state, "ui.monthlyIncome", "Monthly Income")}<strong>${currency(financeSummary.monthlyIncome || 0)}</strong></div>
+        <div class="stat">${t(state, "ui.monthlyExpenses", "Monthly Expenses")}<strong>${currency(financeSummary.monthlyExpenses || 0)}</strong></div>
+        <div class="stat">${t(state, "ui.housingCosts", "Housing Costs")}<strong>${currency(financeSummary.housingCosts || 0)}</strong></div>
+        <div class="stat">${t(state, "ui.avgSpend", "Avg Spend")}<strong>${currency(financeSummary.averageSpending || 0)}</strong></div>
       </div>
     </section>
-    <section class="card"><h3>Calendar</h3>${lifeCalendar || '<p class="muted">No planned events yet.</p>'}</section>
-    <section class="card"><h3>Daily Quests</h3>${dailyQuests || '<p class="muted">No daily quests.</p>'}</section>
-    <section class="card"><h3>Quests</h3>${quests}</section>
-    <section class="card"><h3>Achievements</h3>${achievements}</section>
-    <section class="card"><h3>Work</h3>${jobs}</section>
-    <section class="card"><h3>Operations</h3>${operations}</section>
-    <section class="card"><h3>Businesses</h3>${businesses}</section>
-    <section class="card"><h3>Factions</h3>${factions}</section>
+    <section class="card"><h3>${t(state, "ui.calendar", "Calendar")}</h3>${lifeCalendar || `<p class="muted">${t(state, "ui.noCalendar", "No planned events yet.")}</p>`}</section>
+    <section class="card"><h3>${t(state, "ui.dailyQuests", "Daily Quests")}</h3>${dailyQuests || `<p class="muted">${t(state, "ui.noDailyQuests", "No daily quests.")}</p>`}</section>
+    <section class="card"><h3>${t(state, "ui.quests", "Quests")}</h3>${quests}</section>
+    <section class="card"><h3>${t(state, "ui.achievements", "Achievements")}</h3>${achievements}</section>
+    <section class="card"><h3>${t(state, "ui.work", "Work")}</h3>${jobs}</section>
+    <section class="card"><h3>${t(state, "ui.operations", "Operations")}</h3>${operations}</section>
+    <section class="card"><h3>${t(state, "ui.businesses", "Businesses")}</h3>${businesses}</section>
+    <section class="card"><h3>${t(state, "ui.factions", "Factions")}</h3>${factions}</section>
     <section class="card"><h3>${t(state, "stage4.territories", "Territories")}</h3>${territoryCards}</section>
     <section class="card"><h3>${t(state, "stage4.contacts", "Contacts")}</h3>${contacts}</section>
-    <section class="card"><h3>Bank Transactions</h3>${transactions || '<p class="muted">No transactions yet.</p>'}</section>
-    <section class="card"><h3>Notification Center</h3>${notifications || '<p class="muted">No notifications.</p>'}</section>
+    <section class="card"><h3>${t(state, "ui.bankTransactions", "Bank Transactions")}</h3>${transactions || `<p class="muted">${t(state, "ui.noTransactions", "No transactions yet.")}</p>`}</section>
+    <section class="card"><h3>${t(state, "ui.notifications", "Notification Center")}</h3>${notifications || `<p class="muted">${t(state, "ui.noNotifications", "No notifications.")}</p>`}</section>
     ${debugPanel}
   `;
 }
@@ -1248,12 +1248,12 @@ function render() {
     renderStatus();
     root.innerHTML = `
       <section class="card marble">
-        <h2>Temporary UI Error</h2>
-        <p class="muted">The interface recovered safely. Use the actions below to continue playing.</p>
+        <h2>${t(state, "ui.errorTitle", "Temporary UI Error")}</h2>
+        <p class="muted">${t(state, "ui.errorBody", "The interface recovered safely. Use the actions below to continue playing.")}</p>
         <div class="actions">
-          <button data-action="menu-new-game">Return to Main Menu</button>
-          <button data-action="menu-settings">Open Settings</button>
-          <button data-action="reset-game">Reset Save</button>
+          <button data-action="menu-new-game">${t(state, "ui.returnMenu", "Return to Main Menu")}</button>
+          <button data-action="menu-settings">${t(state, "ui.openSettings", "Open Settings")}</button>
+          <button data-action="reset-game">${t(state, "ui.resetSave", "Reset Save")}</button>
         </div>
       </section>
     `;
