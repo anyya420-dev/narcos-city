@@ -819,16 +819,32 @@ export function mountCityWorld3d({ container, state, onInteract, onMenuAction, o
   zoomInButton.addEventListener("click", onZoomInClick);
   zoomOutButton.addEventListener("click", onZoomOutClick);
   renderer.domElement.addEventListener("wheel", onWheelZoom, { passive: false });
-  const pauseMenuButtons = [...pauseMenu.querySelectorAll("button[data-menu]")];
-  const onPauseMenuClick = (event) => {
-    const menuAction = event.currentTarget.dataset.menu;
+  const runPauseMenuAction = (menuAction) => {
+    if (!menuAction) return;
     if (menuAction === "resume") {
       setPauseState(false);
       return;
     }
     onMenuAction?.(menuAction);
   };
-  pauseMenuButtons.forEach((button) => button.addEventListener("click", onPauseMenuClick));
+  const onPauseMenuPointerDown = (event) => {
+    if (typeof event.button === "number" && event.button !== 0) return;
+    const button = event.target.closest("button[data-menu]");
+    if (!button || !pauseMenu.contains(button)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    runPauseMenuAction(button.dataset.menu);
+  };
+  const onPauseMenuClick = (event) => {
+    const button = event.target.closest("button[data-menu]");
+    if (!button || !pauseMenu.contains(button)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    if (button.dataset.menu === "resume" && !paused) return;
+    runPauseMenuAction(button.dataset.menu);
+  };
+  pauseMenu.addEventListener("pointerdown", onPauseMenuPointerDown);
+  pauseMenu.addEventListener("click", onPauseMenuClick);
 
   function triggerInteraction() {
     if (paused) return;
@@ -1011,7 +1027,8 @@ export function mountCityWorld3d({ container, state, onInteract, onMenuAction, o
       zoomInButton.removeEventListener("click", onZoomInClick);
       zoomOutButton.removeEventListener("click", onZoomOutClick);
       renderer.domElement.removeEventListener("wheel", onWheelZoom);
-      pauseMenuButtons.forEach((button) => button.removeEventListener("click", onPauseMenuClick));
+      pauseMenu.removeEventListener("pointerdown", onPauseMenuPointerDown);
+      pauseMenu.removeEventListener("click", onPauseMenuClick);
       joystick.destroy();
       look.destroy();
       renderer.dispose();
