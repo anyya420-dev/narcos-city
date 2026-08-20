@@ -656,9 +656,11 @@ export function mountCityWorld3d({ container, state, onInteract, onMenuAction, o
 
   const sensitivity = BASE_LOOK_SENSITIVITY * (settings.cameraSensitivity || 1);
 
-  function setPauseState(next) {
+  function setPauseState(next, source = "unknown") {
+    const wasPaused = paused;
     paused = !!next;
     pauseMenu.hidden = !paused;
+    console.debug(`[PAUSE] STATE_CHANGE source=${source} before=${wasPaused} after=${paused} hidden=${pauseMenu.hidden}`);
     if (paused) {
       keys.up = keys.down = keys.left = keys.right = false;
       sprintHeld = false;
@@ -667,7 +669,7 @@ export function mountCityWorld3d({ container, state, onInteract, onMenuAction, o
   }
 
   function togglePause() {
-    setPauseState(!paused);
+    setPauseState(!paused, "toggle");
   }
 
   async function toggleFullscreen() {
@@ -822,7 +824,9 @@ export function mountCityWorld3d({ container, state, onInteract, onMenuAction, o
   const runPauseMenuAction = (menuAction) => {
     if (!menuAction) return;
     if (menuAction === "resume") {
-      setPauseState(false);
+      console.debug(`[PAUSE] CONTINUE_CLICKED before=${paused}`);
+      setPauseState(false, "resume-button");
+      console.debug(`[PAUSE] CONTINUE_DONE after=${paused} hidden=${pauseMenu.hidden}`);
       return;
     }
     onMenuAction?.(menuAction);

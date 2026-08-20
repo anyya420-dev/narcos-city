@@ -546,6 +546,11 @@ select {
   z-index: 6;
 }
 
+.pause-menu[hidden] {
+  display: none !important;
+  pointer-events: none;
+}
+
 .pause-menu h3 {
   margin: 0;
   text-align: center;
