@@ -836,7 +836,7 @@ export function mountCityWorld3d({ container, state, onInteract, onMenuAction, o
       setPauseState(false, "resume-button");
       console.debug(`[PAUSE] CONTINUE_DONE after=${paused} hidden=${pauseMenu.hidden}`);
       const stage = container.querySelector(".city-world-stage");
-      if (stage && stage.tabIndex < 0) stage.tabIndex = 0;
+      if (stage && !stage.hasAttribute("tabindex")) stage.tabIndex = 0;
       if (stage) stage.focus({ preventScroll: true });
       return;
     }
