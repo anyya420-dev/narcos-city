@@ -26,6 +26,7 @@ import {
   getCurrentLocation,
   getCrimeOperations,
   getFactionList,
+  getFamilyOverview,
   getInventoryEntries,
   getJobs,
   getNpcsAtLocation,
@@ -39,6 +40,7 @@ import {
   normalizeState,
   performLocationAction,
   performLifeActivity,
+  performFamilyInteraction,
   performPrisonAction,
   payRent,
   repayCredit,
@@ -66,7 +68,7 @@ import { createDistrictAnchors } from "./cityWorldFoundation.mjs";
 import { createAudioManager } from "./audioManager.mjs";
 import { cityWorldText, DEFAULT_LANGUAGE, getLanguage, t } from "./i18n.mjs";
 
-const STORAGE_KEY = "narcos-city-state-v7";
+const STORAGE_KEY = "narcos-city-state-v8";
 const APP_SETTINGS_KEY = "narcos-city-settings-v1";
 const LOADING_MS = 900;
 
@@ -74,6 +76,7 @@ function loadState() {
   try {
     const saved =
       localStorage.getItem(STORAGE_KEY) ||
+      localStorage.getItem("narcos-city-state-v7") ||
       localStorage.getItem("narcos-city-state-v6") ||
       localStorage.getItem("narcos-city-state-v5") ||
       localStorage.getItem("narcos-city-state-v4");
@@ -118,6 +121,7 @@ function applyLocalizedShell() {
     ["quests", t(state, "nav.quests", "QUESTS")],
     ["inventory", t(state, "nav.inventory", "INVENTORY")],
     ["profile", t(state, "nav.profile", "PROFILE")],
+    ["family", t(state, "nav.family", "FAMILY")],
     ["settings", t(state, "nav.settings", "SETTINGS")]
   ];
   navLabels.forEach(([screen, label]) => {
@@ -580,6 +584,79 @@ function renderProfile() {
   `;
 }
 
+function renderFamily() {
+  if (cityWorldSession) {
+    cityWorldSession.destroy();
+    cityWorldSession = null;
+  }
+  const overview = getFamilyOverview(state);
+  const members = (overview.members || [])
+    .map(
+      (member) => `
+      <article class="card${member.status === "Deceased" ? "" : " active-location"}">
+        <h4>${escapeHtml(member.name)} · ${escapeHtml(member.relationship)}</h4>
+        <p class="muted">${escapeHtml(member.lifeStage)} · ${member.age} · ${escapeHtml(member.occupation || "—")}</p>
+        <p class="muted">${escapeHtml(member.location || "—")} · ${escapeHtml(member.status || "Active")} · Gen ${member.generation}</p>
+        ${member.relationship === "Player" || member.status === "Deceased" ? "" : `<div class="actions">
+          <button data-action="family-interaction" data-family-member-id="${member.id}" data-family-interaction="talk">${t(state, "family.actions.talk", "Talk")}</button>
+          <button data-action="family-interaction" data-family-member-id="${member.id}" data-family-interaction="visit">${t(state, "family.actions.visit", "Visit")}</button>
+          <button data-action="family-interaction" data-family-member-id="${member.id}" data-family-interaction="call">${t(state, "family.actions.call", "Call")}</button>
+          <button data-action="family-interaction" data-family-member-id="${member.id}" data-family-interaction="family-dinner">${t(state, "family.actions.dinner", "Family Dinner")}</button>
+          <button data-action="family-interaction" data-family-member-id="${member.id}" data-family-interaction="gift">${t(state, "family.actions.gift", "Gift")}</button>
+          <button data-action="family-interaction" data-family-member-id="${member.id}" data-family-interaction="comfort">${t(state, "family.actions.comfort", "Comfort")}</button>
+          <button data-action="family-interaction" data-family-member-id="${member.id}" data-family-interaction="apologize">${t(state, "family.actions.apologize", "Apologize")}</button>
+          <button data-action="family-interaction" data-family-member-id="${member.id}" data-family-interaction="reconcile">${t(state, "family.actions.reconcile", "Reconcile")}</button>
+        </div>`}
+      </article>
+    `
+    )
+    .join("");
+  const events = (overview.events || [])
+    .slice(0, 10)
+    .map((entry) => `<p class="muted">• [D${entry.day}] ${escapeHtml(entry.type)} — ${escapeHtml(entry.title)}</p>`)
+    .join("");
+  const memories = (overview.memories || [])
+    .slice(0, 8)
+    .map((entry) => `<p class="muted">• ${escapeHtml(entry.type)} — ${escapeHtml(entry.title)}</p>`)
+    .join("");
+  const pregnancy = overview.pregnancy?.active
+    ? `<div class="grid-2">
+        <div class="stat">${t(state, "family.pregnancy", "Pregnancy")}<strong>${escapeHtml(overview.pregnancy.stage)}</strong></div>
+        <div class="stat">${t(state, "family.progress", "Progress")}<strong>${overview.pregnancy.progressDays}/${overview.pregnancy.totalDays}</strong></div>
+        <div class="stat">${t(state, "family.health", "Health")}<strong>${overview.pregnancy.health}</strong>${progressBar(overview.pregnancy.health)}</div>
+        <div class="stat">${t(state, "family.mood", "Mood")}<strong>${overview.pregnancy.mood}</strong>${progressBar(overview.pregnancy.mood)}</div>
+      </div>`
+    : `<p class="muted">${t(state, "family.noActivePregnancy", "No active pregnancy")}</p>`;
+  root.innerHTML = `
+    <section class="card marble">
+      <h2>${t(state, "family.title", "Family & Generations")}</h2>
+      <p class="muted">${t(state, "family.profile", "Family Profile")}: ${escapeHtml(overview.familyName)}</p>
+      <div class="grid-2">
+        <div class="stat">${t(state, "family.generation", "Generation")}<strong>${overview.generation || 1}</strong></div>
+        <div class="stat">${t(state, "family.wealth", "Family Wealth")}<strong>${currency(overview.familyWealth || 0)}</strong></div>
+        <div class="stat">${t(state, "family.reputation", "Family Reputation")}<strong>${overview.familyReputation || 0}</strong></div>
+        <div class="stat">${t(state, "family.mainResidence", "Main Residence")}<strong>${escapeHtml(String(overview.mainResidence || "None"))}</strong></div>
+      </div>
+    </section>
+    <section class="card"><h3>${t(state, "family.pregnancy", "Pregnancy")}</h3>${pregnancy}</section>
+    <section class="card"><h3>${t(state, "family.finances", "Family Finances")}</h3>
+      <div class="grid-2">
+        <div class="stat">${t(state, "family.income", "Income")}<strong>${currency(overview.finances?.income || 0)}</strong></div>
+        <div class="stat">${t(state, "family.expenses", "Expenses")}<strong>${currency(overview.finances?.expenses || 0)}</strong></div>
+        <div class="stat">${t(state, "family.housing", "Housing")}<strong>${currency(overview.finances?.housing || 0)}</strong></div>
+        <div class="stat">${t(state, "family.food", "Food")}<strong>${currency(overview.finances?.food || 0)}</strong></div>
+        <div class="stat">${t(state, "family.education", "Education")}<strong>${currency(overview.finances?.education || 0)}</strong></div>
+        <div class="stat">${t(state, "family.healthcare", "Healthcare")}<strong>${currency(overview.finances?.healthcare || 0)}</strong></div>
+        <div class="stat">${t(state, "family.childcare", "Childcare")}<strong>${currency(overview.finances?.child || 0)}</strong></div>
+        <div class="stat">${t(state, "family.luxury", "Luxury")}<strong>${currency(overview.finances?.luxury || 0)}</strong></div>
+      </div>
+    </section>
+    <section class="card"><h3>${t(state, "family.tree", "Family Tree")}</h3>${members || `<p class="muted">${t(state, "family.noMembers", "No family members yet.")}</p>`}</section>
+    <section class="card"><h3>${t(state, "family.events", "Family Events")}</h3>${events || `<p class="muted">${t(state, "family.noEvents", "No family events yet.")}</p>`}</section>
+    <section class="card"><h3>${t(state, "family.history", "Family History")}</h3>${memories || `<p class="muted">${t(state, "family.noHistory", "No family history yet.")}</p>`}</section>
+  `;
+}
+
 function renderInventory() {
   if (cityWorldSession) {
     cityWorldSession.destroy();
@@ -962,7 +1039,7 @@ function render() {
       return;
     }
 
-    const navVisible = state.meta.hasCreatedCharacter && ["districts", "profile", "inventory", "quests", "settings"].includes(state.currentScreen);
+    const navVisible = state.meta.hasCreatedCharacter && ["districts", "profile", "inventory", "quests", "family", "settings"].includes(state.currentScreen);
     nav.style.display = navVisible ? "grid" : "none";
     nav.querySelectorAll("button").forEach((button) => {
       button.classList.toggle("active", button.dataset.screen === state.currentScreen);
@@ -1001,6 +1078,9 @@ function render() {
         break;
       case "profile":
         renderProfile();
+        break;
+      case "family":
+        renderFamily();
         break;
       case "inventory":
         renderInventory();
@@ -1072,7 +1152,9 @@ root.addEventListener("click", (event) => {
     rentMode,
     lifeActivity,
     outfitPreset,
-    eventType
+    eventType,
+    familyMemberId,
+    familyInteraction
   } = button.dataset;
   try {
     if (action === "create-player") {
@@ -1180,6 +1262,7 @@ root.addEventListener("click", (event) => {
     if (action === "date-npc") startDateWithNpc(state, npcId, locationId || "restaurant");
     if (action === "propose-npc") proposeToNpc(state, npcId);
     if (action === "social-event") hostSocialEvent(state, eventType || "party");
+    if (action === "family-interaction") performFamilyInteraction(state, familyMemberId, familyInteraction || "talk");
     if (action === "crime-operation") runCrimeOperation(state, operationId);
     if (action === "prison-action") performPrisonAction(state, prisonActionId);
     if (action === "credit-request") requestCredit(state, Number(amount || 500));

@@ -248,7 +248,7 @@ select {
   right: 0;
   bottom: 0;
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: 0.34rem;
   padding: 0.55rem 0.55rem calc(0.55rem + env(safe-area-inset-bottom, 0px));
   border-top: 1px solid rgba(181, 154, 95, 0.22);
@@ -259,7 +259,7 @@ select {
   border-color: rgba(170, 176, 189, 0.3);
   padding: 0.48rem 0.2rem;
   min-height: 40px;
-  font-size: 0.63rem;
+  font-size: 0.58rem;
 }
 
 .bottom-nav button.active {

@@ -3,7 +3,7 @@ export const SUPPORTED_LANGUAGES = ["ru", "en"];
 
 const L = {
   ru: {
-    nav: { city: "ГОРОД", map: "КАРТА", quests: "КВЕСТЫ", inventory: "ИНВЕНТАРЬ", profile: "ПРОФИЛЬ", settings: "НАСТРОЙКИ" },
+    nav: { city: "ГОРОД", map: "КАРТА", quests: "КВЕСТЫ", inventory: "ИНВЕНТАРЬ", profile: "ПРОФИЛЬ", family: "СЕМЬЯ", settings: "НАСТРОЙКИ" },
     menu: { play: "ИГРАТЬ", continue: "ПРОДОЛЖИТЬ", profile: "ПРОФИЛЬ", settings: "НАСТРОЙКИ", create: "Создать персонажа", enter: "Войти в город" },
     settings: { title: "Настройки", language: "Язык", save: "Сохранить настройки", graphics: "Графика", controls: "Чувствительность управления", camera: "Чувствительность камеры" },
     common: { on: "ВКЛ", off: "ВЫКЛ", map: "Карта", travel: "Поездка", save: "Сохранить", weather: "Погода", day: "ДЕНЬ", time: "ВРЕМЯ", season: "Сезон" },
@@ -22,10 +22,39 @@ const L = {
       uiError: "Произошла ошибка интерфейса. Вы можете продолжить через главное меню.",
       actionFailed: "Последнее действие безопасно отменено. Попробуйте снова.",
       worldUnavailable: "3D-мир недоступен в этом браузере. Используйте карту, квесты, инвентарь и профиль."
+    },
+    family: {
+      title: "Семья и поколения",
+      profile: "Профиль семьи",
+      tree: "Семейное древо",
+      events: "Семейные события",
+      finances: "Семейные финансы",
+      history: "История семьи",
+      pregnancy: "Беременность",
+      noActivePregnancy: "Активной беременности нет",
+      generation: "Поколение",
+      wealth: "Семейное богатство",
+      reputation: "Семейная репутация",
+      mainResidence: "Основной дом",
+      income: "Доход",
+      expenses: "Расходы",
+      housing: "Жильё",
+      food: "Еда",
+      education: "Образование",
+      healthcare: "Здравоохранение",
+      childcare: "Дети",
+      luxury: "Роскошь",
+      progress: "Прогресс",
+      health: "Здоровье",
+      mood: "Настроение",
+      noMembers: "Семейные связи пока не сформированы.",
+      noEvents: "Пока нет семейных событий.",
+      noHistory: "Пока нет семейной истории.",
+      actions: { talk: "Поговорить", visit: "Навестить", call: "Позвонить", dinner: "Семейный ужин", gift: "Подарок", comfort: "Поддержать", apologize: "Извиниться", reconcile: "Примириться" }
     }
   },
   en: {
-    nav: { city: "CITY", map: "MAP", quests: "QUESTS", inventory: "INVENTORY", profile: "PROFILE", settings: "SETTINGS" },
+    nav: { city: "CITY", map: "MAP", quests: "QUESTS", inventory: "INVENTORY", profile: "PROFILE", family: "FAMILY", settings: "SETTINGS" },
     menu: { play: "PLAY", continue: "CONTINUE", profile: "PROFILE", settings: "SETTINGS", create: "Create Character", enter: "Enter City" },
     settings: { title: "Settings", language: "Language", save: "Save Settings", graphics: "Graphics Quality", controls: "Controls Sensitivity", camera: "Camera Sensitivity" },
     common: { on: "ON", off: "OFF", map: "Map", travel: "Travel", save: "Save", weather: "Weather", day: "DAY", time: "TIME", season: "Season" },
@@ -44,6 +73,35 @@ const L = {
       uiError: "A UI error occurred. You can continue by returning to the main menu.",
       actionFailed: "The last action failed safely. Please try again.",
       worldUnavailable: "3D world unavailable in this browser. Use map, quests, inventory, and profile panels."
+    },
+    family: {
+      title: "Family & Generations",
+      profile: "Family Profile",
+      tree: "Family Tree",
+      events: "Family Events",
+      finances: "Family Finances",
+      history: "Family History",
+      pregnancy: "Pregnancy",
+      noActivePregnancy: "No active pregnancy",
+      generation: "Generation",
+      wealth: "Family Wealth",
+      reputation: "Family Reputation",
+      mainResidence: "Main Residence",
+      income: "Income",
+      expenses: "Expenses",
+      housing: "Housing",
+      food: "Food",
+      education: "Education",
+      healthcare: "Healthcare",
+      childcare: "Childcare",
+      luxury: "Luxury",
+      progress: "Progress",
+      health: "Health",
+      mood: "Mood",
+      noMembers: "No family members yet.",
+      noEvents: "No family events yet.",
+      noHistory: "No family history yet.",
+      actions: { talk: "Talk", visit: "Visit", call: "Call", dinner: "Family Dinner", gift: "Gift", comfort: "Comfort", apologize: "Apologize", reconcile: "Reconcile" }
     }
   }
 };

@@ -32,14 +32,16 @@ import {
   proposeToNpc,
   safehouseRest,
   performLifeActivity,
+  performFamilyInteraction,
   payRent,
   travelToDistrict,
-  useInventoryItem
+  useInventoryItem,
+  getFamilyOverview
 } from "../src/gameLogic.mjs";
 
 test("initial state has stage2 structures", () => {
   const state = createInitialState();
-  assert.equal(state.meta.saveVersion, 7);
+  assert.equal(state.meta.saveVersion, 8);
   assert.ok(state.districts.length >= 10);
   assert.ok(state.marketCatalog.length >= 10);
   assert.equal(state.player.wantedLevel, 0);
@@ -152,7 +154,7 @@ test("normalize migrates old saves and keeps safe defaults", () => {
   const migrated = normalizeState({ player: { name: "Old", money: 200 }, time: { day: 3, turn: 2 }, inventory: [{ id: "medkit", quantity: 1 }] });
   assert.equal(migrated.player.name, "Old");
   assert.equal(typeof migrated.inventory, "object");
-  assert.ok(migrated.meta.saveVersion === 7);
+  assert.ok(migrated.meta.saveVersion === 8);
   assert.ok(migrated.life?.needs);
 });
 
@@ -246,4 +248,50 @@ test("wardrobe, dating, proposal, and wedding flows update relationship state", 
   proposeToNpc(state, npcId);
   hostSocialEvent(state, "wedding");
   assert.equal(state.life.relationshipStatus, "Married");
+});
+
+test("family system initializes with persistent members", () => {
+  const state = createInitialState();
+  createPlayer(state, "Rico");
+  const overview = getFamilyOverview(state);
+  assert.ok(overview.familyName.includes("Rico"));
+  assert.ok(Array.isArray(overview.members));
+  assert.ok(overview.members.length >= 4);
+  assert.ok(overview.members.some((member) => member.relationship === "Parent"));
+});
+
+test("pregnancy progresses to birth and creates child member", () => {
+  const state = createInitialState();
+  createPlayer(state, "Rico");
+  state.player.money = 100000;
+  const npcId = "npc-restaurant-owner-1";
+  const relation = state.relationships[npcId];
+  relation.romance = 90;
+  relation.trust = 90;
+  relation.value = 90;
+  proposeToNpc(state, npcId);
+  hostSocialEvent(state, "wedding");
+  const beforeChildren = getFamilyOverview(state).members.filter((entry) => entry.relationship === "Child").length;
+  state.family.pregnancy.active = true;
+  state.family.pregnancy.parentAId = state.family.playerCharacterId;
+  state.family.pregnancy.parentBId = `char-${npcId}`;
+  state.family.pregnancy.progressDays = state.family.pregnancy.totalDays - 1;
+  const targetDay = state.time.day + 1;
+  while (state.time.day < targetDay) {
+    performLifeActivity(state, "sleep");
+  }
+  const afterChildren = getFamilyOverview(state).members.filter((entry) => entry.relationship === "Child").length;
+  assert.ok(afterChildren > beforeChildren);
+});
+
+test("family interactions create relationship events", () => {
+  const state = createInitialState();
+  createPlayer(state, "Rico");
+  const overviewBefore = getFamilyOverview(state);
+  const target = overviewBefore.members.find((entry) => entry.relationship === "Sibling");
+  assert.ok(target);
+  const eventsBefore = overviewBefore.events.length;
+  performFamilyInteraction(state, target.id, "visit");
+  const overviewAfter = getFamilyOverview(state);
+  assert.ok(overviewAfter.events.length > eventsBefore);
 });

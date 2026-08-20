@@ -39,6 +39,24 @@ const LIFESTYLE_LEVELS = ["Poor", "Comfortable", "Wealthy", "Luxury", "Elite"];
 const SOCIAL_STATUS_LEVELS = ["Unknown", "Local", "Recognized", "Influential", "Elite", "VIP", "Legendary"];
 const CAREER_LEVELS = ["Entry", "Junior", "Experienced", "Senior", "Manager", "Executive"];
 const OUTFIT_PRESETS = ["Casual", "Elegant", "Luxury", "Street", "Business", "Nightlife", "Sport"];
+const FAMILY_LIFE_STAGES = [
+  { id: "Baby", min: 0, max: 1 },
+  { id: "Toddler", min: 2, max: 4 },
+  { id: "Child", min: 5, max: 12 },
+  { id: "Teen", min: 13, max: 17 },
+  { id: "Young Adult", min: 18, max: 25 },
+  { id: "Adult", min: 26, max: 59 },
+  { id: "Elder", min: 60, max: 160 }
+];
+const EDUCATION_TRACK_BY_STAGE = {
+  Baby: "Home Care",
+  Toddler: "Childcare",
+  Child: "School",
+  Teen: "High School",
+  "Young Adult": "University",
+  Adult: "Career",
+  Elder: "Legacy"
+};
 
 function clone(value) {
   return structuredClone(value);
@@ -66,6 +84,564 @@ function getItemCategory(itemId) {
 
 function relationshipStatus(value) {
   return RELATIONSHIP_STATUSES.find((entry) => value >= entry.min && value <= entry.max)?.label ?? "Stranger";
+}
+
+function lifeStageFromAge(age = 0) {
+  return FAMILY_LIFE_STAGES.find((entry) => age >= entry.min && age <= entry.max)?.id || "Adult";
+}
+
+function createFamilyMember(state, input = {}) {
+  const age = Math.max(0, Math.round(input.age ?? 0));
+  return {
+    id: input.id || makeId("char"),
+    name: input.name || "Unknown",
+    gender: input.gender || "Unknown",
+    alive: input.alive !== false,
+    status: input.status || "Active",
+    familyId: input.familyId || null,
+    householdId: input.householdId || null,
+    motherId: input.motherId || null,
+    fatherId: input.fatherId || null,
+    partnerId: input.partnerId || null,
+    spouseId: input.spouseId || null,
+    childrenIds: Array.isArray(input.childrenIds) ? [...new Set(input.childrenIds)] : [],
+    siblingIds: Array.isArray(input.siblingIds) ? [...new Set(input.siblingIds)] : [],
+    occupation: input.occupation || "Unemployed",
+    locationId: input.locationId || "safehouse",
+    homeLocationId: input.homeLocationId || "safehouse",
+    age,
+    birthday: input.birthday || { day: state.time.monthDay, month: state.time.month, year: state.time.year - age },
+    lastBirthdayDay: input.lastBirthdayDay || 0,
+    lifeStage: input.lifeStage || lifeStageFromAge(age),
+    health: Number.isFinite(input.health) ? input.health : 78,
+    mood: Number.isFinite(input.mood) ? input.mood : 70,
+    care: Number.isFinite(input.care) ? input.care : 72,
+    traits: Array.isArray(input.traits) ? [...input.traits] : [],
+    education: {
+      track: input.education?.track || EDUCATION_TRACK_BY_STAGE[input.lifeStage || lifeStageFromAge(age)] || "School",
+      level: input.education?.level || "Primary",
+      points: Number.isFinite(input.education?.points) ? input.education.points : 0
+    },
+    familyRelationStats: {
+      affection: Number.isFinite(input.familyRelationStats?.affection) ? input.familyRelationStats.affection : 60,
+      trust: Number.isFinite(input.familyRelationStats?.trust) ? input.familyRelationStats.trust : 60,
+      closeness: Number.isFinite(input.familyRelationStats?.closeness) ? input.familyRelationStats.closeness : 55,
+      conflict: Number.isFinite(input.familyRelationStats?.conflict) ? input.familyRelationStats.conflict : 10
+    },
+    meta: {
+      generation: input.meta?.generation || 1,
+      npcId: input.meta?.npcId || null,
+      isPlayer: Boolean(input.meta?.isPlayer)
+    }
+  };
+}
+
+function addFamilyMemory(state, event) {
+  if (!state.family) return;
+  const row = {
+    id: makeId("family-memory"),
+    day: state.time.day,
+    month: state.time.month,
+    year: state.time.year,
+    ...event
+  };
+  state.family.memories.unshift(row);
+  state.family.memories = state.family.memories.slice(0, 250);
+}
+
+function addFamilyEvent(state, event) {
+  if (!state.family) return;
+  const row = {
+    id: makeId("family-event"),
+    day: state.time.day,
+    month: state.time.month,
+    year: state.time.year,
+    ...event
+  };
+  state.family.events.unshift(row);
+  state.family.events = state.family.events.slice(0, 200);
+  if (["Wedding", "Graduation", "Birth", "Reconciliation"].includes(event.type)) {
+    state.family.socialStatus.reputation = clamp((state.family.socialStatus.reputation || 0) + 2, -100, 200);
+  }
+  if (["Family Conflict", "Memorial"].includes(event.type)) {
+    state.family.socialStatus.reputation = clamp((state.family.socialStatus.reputation || 0) - 1, -100, 200);
+  }
+  addFamilyMemory(state, event);
+}
+
+function syncPlayerFamilyMember(state) {
+  if (!state.family?.playerCharacterId) return;
+  const member = state.family.members[state.family.playerCharacterId];
+  if (!member) return;
+  member.name = state.player.name;
+  member.age = state.life.age;
+  member.birthday = state.life.birthday;
+  member.lifeStage = lifeStageFromAge(member.age);
+  member.occupation = state.life.occupation || member.occupation;
+  member.locationId = state.currentLocationId;
+  member.householdId = state.family.playerHouseholdId || member.householdId;
+  member.education.track = state.life.education?.level || member.education.track;
+  member.education.points = state.life.education?.points || member.education.points;
+}
+
+function ensureFamilyState(state) {
+  if (!state.family || typeof state.family !== "object") state.family = {};
+  const family = state.family;
+  family.families = family.families && typeof family.families === "object" ? family.families : {};
+  family.households = family.households && typeof family.households === "object" ? family.households : {};
+  family.members = family.members && typeof family.members === "object" ? family.members : {};
+  family.events = Array.isArray(family.events) ? family.events : [];
+  family.memories = Array.isArray(family.memories) ? family.memories : [];
+  family.settings = {
+    ageRateDaysPerYear: Number.isFinite(family.settings?.ageRateDaysPerYear) ? family.settings.ageRateDaysPerYear : 120,
+    ...family.settings
+  };
+  family.socialStatus = {
+    reputation: Number.isFinite(family.socialStatus?.reputation) ? family.socialStatus.reputation : 0,
+    ...family.socialStatus
+  };
+  family.legacy = {
+    wealth: Number.isFinite(family.legacy?.wealth) ? family.legacy.wealth : 0,
+    reputation: Number.isFinite(family.legacy?.reputation) ? family.legacy.reputation : 0,
+    properties: Array.isArray(family.legacy?.properties) ? family.legacy.properties : [],
+    achievements: Array.isArray(family.legacy?.achievements) ? family.legacy.achievements : [],
+    generation: Number.isFinite(family.legacy?.generation) ? family.legacy.generation : 1,
+    history: Array.isArray(family.legacy?.history) ? family.legacy.history : [],
+    inheritancePool: Number.isFinite(family.legacy?.inheritancePool) ? family.legacy.inheritancePool : 0
+  };
+  family.inheritance = {
+    pending: Array.isArray(family.inheritance?.pending) ? family.inheritance.pending : [],
+    transfers: Array.isArray(family.inheritance?.transfers) ? family.inheritance.transfers : []
+  };
+  family.pregnancy = {
+    active: Boolean(family.pregnancy?.active),
+    parentAId: family.pregnancy?.parentAId || null,
+    parentBId: family.pregnancy?.parentBId || null,
+    stage: family.pregnancy?.stage || "Early",
+    progressDays: Number.isFinite(family.pregnancy?.progressDays) ? family.pregnancy.progressDays : 0,
+    totalDays: Number.isFinite(family.pregnancy?.totalDays) ? family.pregnancy.totalDays : 21,
+    expectedDay: family.pregnancy?.expectedDay || state.time.day + 21,
+    expectedMonth: family.pregnancy?.expectedMonth || state.time.month,
+    expectedYear: family.pregnancy?.expectedYear || state.time.year,
+    health: Number.isFinite(family.pregnancy?.health) ? family.pregnancy.health : 76,
+    mood: Number.isFinite(family.pregnancy?.mood) ? family.pregnancy.mood : 66,
+    appointments: Array.isArray(family.pregnancy?.appointments) ? family.pregnancy.appointments : []
+  };
+  if (!family.playerFamilyId) family.playerFamilyId = "fam-player";
+  if (!family.playerHouseholdId) family.playerHouseholdId = "house-player";
+  if (!family.playerCharacterId) family.playerCharacterId = "char-player";
+  family.families[family.playerFamilyId] = {
+    id: family.playerFamilyId,
+    name: family.families[family.playerFamilyId]?.name || `${state.player.name} Family`,
+    memberIds: Array.isArray(family.families[family.playerFamilyId]?.memberIds) ? family.families[family.playerFamilyId].memberIds : [],
+    wealth: Number.isFinite(family.families[family.playerFamilyId]?.wealth) ? family.families[family.playerFamilyId].wealth : 0,
+    reputation: Number.isFinite(family.families[family.playerFamilyId]?.reputation) ? family.families[family.playerFamilyId].reputation : 0
+  };
+  family.households[family.playerHouseholdId] = {
+    id: family.playerHouseholdId,
+    familyId: family.playerFamilyId,
+    name: family.households[family.playerHouseholdId]?.name || "Primary Household",
+    homePropertyId: family.households[family.playerHouseholdId]?.homePropertyId || state.life?.residence?.propertyId || null,
+    memberIds: Array.isArray(family.households[family.playerHouseholdId]?.memberIds) ? family.households[family.playerHouseholdId].memberIds : [],
+    finances: {
+      income: Number.isFinite(family.households[family.playerHouseholdId]?.finances?.income) ? family.households[family.playerHouseholdId].finances.income : 0,
+      expenses: Number.isFinite(family.households[family.playerHouseholdId]?.finances?.expenses) ? family.households[family.playerHouseholdId].finances.expenses : 0,
+      housing: Number.isFinite(family.households[family.playerHouseholdId]?.finances?.housing) ? family.households[family.playerHouseholdId].finances.housing : 0,
+      food: Number.isFinite(family.households[family.playerHouseholdId]?.finances?.food) ? family.households[family.playerHouseholdId].finances.food : 0,
+      education: Number.isFinite(family.households[family.playerHouseholdId]?.finances?.education) ? family.households[family.playerHouseholdId].finances.education : 0,
+      healthcare: Number.isFinite(family.households[family.playerHouseholdId]?.finances?.healthcare) ? family.households[family.playerHouseholdId].finances.healthcare : 0,
+      child: Number.isFinite(family.households[family.playerHouseholdId]?.finances?.child) ? family.households[family.playerHouseholdId].finances.child : 0,
+      luxury: Number.isFinite(family.households[family.playerHouseholdId]?.finances?.luxury) ? family.households[family.playerHouseholdId].finances.luxury : 0
+    }
+  };
+  if (!family.members[family.playerCharacterId]) {
+    family.members[family.playerCharacterId] = createFamilyMember(state, {
+      id: family.playerCharacterId,
+      name: state.player.name,
+      gender: "Female",
+      age: state.life.age,
+      birthday: state.life.birthday,
+      familyId: family.playerFamilyId,
+      householdId: family.playerHouseholdId,
+      occupation: state.life.occupation || "Unemployed",
+      locationId: state.currentLocationId,
+      traits: ["Calm", "Ambitious"],
+      meta: { generation: 1, isPlayer: true }
+    });
+  }
+  syncPlayerFamilyMember(state);
+  const rootFamily = family.families[family.playerFamilyId];
+  if (!rootFamily.memberIds.includes(family.playerCharacterId)) rootFamily.memberIds.push(family.playerCharacterId);
+  const rootHousehold = family.households[family.playerHouseholdId];
+  if (!rootHousehold.memberIds.includes(family.playerCharacterId)) rootHousehold.memberIds.push(family.playerCharacterId);
+  if (!state.relationshipsFoundation?.family?.children) state.relationshipsFoundation.family.children = [];
+}
+
+function addMemberToFamily(state, member) {
+  ensureFamilyState(state);
+  state.family.members[member.id] = member;
+  if (!state.family.families[member.familyId]) {
+    state.family.families[member.familyId] = { id: member.familyId, name: `${member.name} Family`, memberIds: [], wealth: 0, reputation: 0 };
+  }
+  if (!state.family.households[member.householdId]) {
+    state.family.households[member.householdId] = {
+      id: member.householdId,
+      familyId: member.familyId,
+      name: `${member.name} Household`,
+      homePropertyId: null,
+      memberIds: [],
+      finances: { income: 0, expenses: 0, housing: 0, food: 0, education: 0, healthcare: 0, child: 0, luxury: 0 }
+    };
+  }
+  const family = state.family.families[member.familyId];
+  if (!family.memberIds.includes(member.id)) family.memberIds.push(member.id);
+  const household = state.family.households[member.householdId];
+  if (!household.memberIds.includes(member.id)) household.memberIds.push(member.id);
+}
+
+function seedPlayerFamily(state) {
+  ensureFamilyState(state);
+  const playerId = state.family.playerCharacterId;
+  const player = state.family.members[playerId];
+  if (!player) return;
+  if (player.motherId || player.fatherId) return;
+  const familyId = state.family.playerFamilyId;
+  const householdId = state.family.playerHouseholdId;
+  const mother = createFamilyMember(state, {
+    id: "char-player-mother",
+    name: "Elena Volkov",
+    gender: "Female",
+    age: Math.max(state.life.age + 24, 46),
+    familyId,
+    householdId,
+    occupation: "Teacher",
+    locationId: "residential-school",
+    traits: ["Kind", "Calm"],
+    meta: { generation: 0 }
+  });
+  const father = createFamilyMember(state, {
+    id: "char-player-father",
+    name: "Roman Volkov",
+    gender: "Male",
+    age: Math.max(state.life.age + 26, 48),
+    familyId,
+    householdId,
+    occupation: "Manager",
+    locationId: "office-complex",
+    traits: ["Strict", "Generous"],
+    meta: { generation: 0 }
+  });
+  const sibling = createFamilyMember(state, {
+    id: "char-player-sibling",
+    name: "Mila Volkov",
+    gender: "Female",
+    age: Math.max(18, state.life.age - 4),
+    familyId,
+    householdId,
+    occupation: "Student",
+    locationId: "university-campus",
+    traits: ["Social", "Ambitious"],
+    meta: { generation: 1 }
+  });
+  addMemberToFamily(state, mother);
+  addMemberToFamily(state, father);
+  addMemberToFamily(state, sibling);
+  player.motherId = mother.id;
+  player.fatherId = father.id;
+  player.siblingIds = [...new Set([...(player.siblingIds || []), sibling.id])];
+  mother.childrenIds = [...new Set([...(mother.childrenIds || []), player.id, sibling.id])];
+  father.childrenIds = [...new Set([...(father.childrenIds || []), player.id, sibling.id])];
+  sibling.motherId = mother.id;
+  sibling.fatherId = father.id;
+  sibling.siblingIds = [...new Set([...(sibling.siblingIds || []), player.id])];
+  addFamilyEvent(state, { type: "Family Foundation", title: "Parents and sibling connected", members: [mother.id, father.id, sibling.id] });
+}
+
+function seedNpcFamilies(state) {
+  ensureFamilyState(state);
+  if (state.family.npcSeeded) return;
+  const pairs = [
+    ["npc-restaurant-owner-1", "npc-business-assistant-1", "Aria"],
+    ["npc-banker-1", "npc-lawyer-1", "Nikita"],
+    ["npc-nightclub-owner-1", "npc-casino-manager-1", "Lena"]
+  ];
+  for (const [npcA, npcB, childName] of pairs) {
+    const a = state.npcs.find((n) => n.id === npcA);
+    const b = state.npcs.find((n) => n.id === npcB);
+    if (!a || !b) continue;
+    const famId = `fam-${npcA}`;
+    const houseId = `house-${npcA}`;
+    state.family.families[famId] = state.family.families[famId] || { id: famId, name: `${a.name} Family`, memberIds: [], wealth: 0, reputation: 0 };
+    state.family.households[houseId] = state.family.households[houseId] || {
+      id: houseId,
+      familyId: famId,
+      name: `${a.name} Household`,
+      homePropertyId: null,
+      memberIds: [],
+      finances: { income: 0, expenses: 0, housing: 0, food: 0, education: 0, healthcare: 0, child: 0, luxury: 0 }
+    };
+    const parentAId = `char-${npcA}`;
+    const parentBId = `char-${npcB}`;
+    const existingA = state.family.members[parentAId] || createFamilyMember(state, {
+      id: parentAId,
+      name: a.name,
+      gender: "Unknown",
+      age: 34,
+      familyId: famId,
+      householdId: houseId,
+      occupation: a.role,
+      locationId: a.location,
+      traits: ["Ambitious"],
+      meta: { npcId: a.id, generation: 1 }
+    });
+    const existingB = state.family.members[parentBId] || createFamilyMember(state, {
+      id: parentBId,
+      name: b.name,
+      gender: "Unknown",
+      age: 33,
+      familyId: famId,
+      householdId: houseId,
+      occupation: b.role,
+      locationId: b.location,
+      traits: ["Social"],
+      meta: { npcId: b.id, generation: 1 }
+    });
+    addMemberToFamily(state, existingA);
+    addMemberToFamily(state, existingB);
+    existingA.partnerId = parentBId;
+    existingB.partnerId = parentAId;
+    const childId = `char-child-${npcA}`;
+    if (!state.family.members[childId]) {
+      const child = createFamilyMember(state, {
+        id: childId,
+        name: childName,
+        gender: "Unknown",
+        age: 8,
+        familyId: famId,
+        householdId: houseId,
+        motherId: parentAId,
+        fatherId: parentBId,
+        occupation: "Student",
+        locationId: "residential-school",
+        traits: ["Kind"],
+        meta: { generation: 2 }
+      });
+      addMemberToFamily(state, child);
+      existingA.childrenIds.push(child.id);
+      existingB.childrenIds.push(child.id);
+    }
+  }
+  state.family.npcSeeded = true;
+}
+
+function householdCapacityFromProperty(propertyType = "") {
+  const text = String(propertyType).toLowerCase();
+  if (text.includes("mansion")) return 10;
+  if (text.includes("house")) return 7;
+  if (text.includes("large")) return 5;
+  if (text.includes("apartment")) return 3;
+  return 2;
+}
+
+function maybeStartPregnancy(state) {
+  ensureFamilyState(state);
+  const p = state.family.pregnancy;
+  if (p.active) return;
+  if (!state.relationshipsFoundation.marriage?.partnerId && !state.relationshipsFoundation.partnerId) return;
+  const partnerNpcId = state.relationshipsFoundation.marriage?.partnerId || state.relationshipsFoundation.partnerId;
+  const partnerNpc = state.npcs.find((n) => n.id === partnerNpcId);
+  if (!partnerNpc) return;
+  const relation = ensureRelation(state, partnerNpcId);
+  if (relation.romance < 70 || relation.trust < 50) return;
+  const playerMember = state.family.members[state.family.playerCharacterId];
+  if (!playerMember || playerMember.age < 18 || playerMember.age > 45) return;
+  if (seededRandom(state) > 0.08) return;
+  const partnerMemberId = `char-${partnerNpc.id}`;
+  if (!state.family.members[partnerMemberId]) {
+    addMemberToFamily(
+      state,
+      createFamilyMember(state, {
+        id: partnerMemberId,
+        name: partnerNpc.name,
+        age: 30,
+        familyId: state.family.playerFamilyId,
+        householdId: state.family.playerHouseholdId,
+        occupation: partnerNpc.role,
+        locationId: partnerNpc.location,
+        meta: { npcId: partnerNpc.id, generation: 1 }
+      })
+    );
+  }
+  playerMember.partnerId = partnerMemberId;
+  state.family.members[partnerMemberId].partnerId = playerMember.id;
+  p.active = true;
+  p.parentAId = playerMember.id;
+  p.parentBId = partnerMemberId;
+  p.stage = "Early";
+  p.progressDays = 0;
+  p.totalDays = 21;
+  p.expectedDay = state.time.day + p.totalDays;
+  p.expectedMonth = state.time.month;
+  p.expectedYear = state.time.year;
+  p.health = 78;
+  p.mood = 68;
+  p.appointments = [{ day: state.time.day + 4, title: "Doctor Appointment" }];
+  addFamilyEvent(state, { type: "Pregnancy", title: "Pregnancy started", members: [p.parentAId, p.parentBId] });
+  addNotification(state, "Family", "Pregnancy started. Family journey continues.", "success");
+}
+
+function spawnChildMember(state, pregnancy) {
+  const parentA = state.family.members[pregnancy.parentAId];
+  const parentB = state.family.members[pregnancy.parentBId];
+  if (!parentA || !parentB) return null;
+  const childId = makeId("char-child");
+  const namePool = ["Sofia", "Daniil", "Mia", "Artem", "Eva", "Leo"];
+  const child = createFamilyMember(state, {
+    id: childId,
+    name: namePool[Math.floor(seededRandom(state) * namePool.length) % namePool.length],
+    gender: seededRandom(state) < 0.5 ? "Female" : "Male",
+    age: 0,
+    familyId: parentA.familyId,
+    householdId: parentA.householdId,
+    motherId: parentA.gender === "Female" ? parentA.id : parentB.id,
+    fatherId: parentA.gender === "Male" ? parentA.id : parentB.id,
+    occupation: "Baby",
+    locationId: parentA.homeLocationId || "safehouse",
+    traits: [seededRandom(state) > 0.5 ? "Calm" : "Social"],
+    meta: { generation: Math.max(parentA.meta.generation || 1, parentB.meta.generation || 1) + 1 }
+  });
+  addMemberToFamily(state, child);
+  parentA.childrenIds = [...new Set([...(parentA.childrenIds || []), child.id])];
+  parentB.childrenIds = [...new Set([...(parentB.childrenIds || []), child.id])];
+  const siblingIds = [...new Set([...(parentA.childrenIds || []), ...(parentB.childrenIds || [])])].filter((id) => id !== child.id);
+  child.siblingIds = siblingIds;
+  for (const siblingId of siblingIds) {
+    const sibling = state.family.members[siblingId];
+    if (sibling) sibling.siblingIds = [...new Set([...(sibling.siblingIds || []), child.id])];
+  }
+  return child;
+}
+
+function closePregnancyWithBirth(state) {
+  const p = state.family.pregnancy;
+  const child = spawnChildMember(state, p);
+  if (!child) return;
+  state.relationshipsFoundation.family.children = [...new Set([...(state.relationshipsFoundation.family.children || []), child.id])];
+  p.active = false;
+  p.parentAId = null;
+  p.parentBId = null;
+  p.stage = "Early";
+  p.progressDays = 0;
+  p.appointments = [];
+  addFamilyEvent(state, { type: "Birth", title: `${child.name} was born`, members: [child.id] });
+  addCalendarEvent(state, { type: "Birth", title: `${child.name} joined family` });
+  addNotification(state, "Family", `${child.name} was born.`, "success");
+}
+
+function updateMemberLifeStage(member) {
+  const nextStage = lifeStageFromAge(member.age);
+  if (member.lifeStage !== nextStage) {
+    member.lifeStage = nextStage;
+    member.education.track = EDUCATION_TRACK_BY_STAGE[nextStage] || member.education.track;
+    if (nextStage === "Young Adult") member.occupation = member.occupation === "Student" ? "University Student" : member.occupation;
+    if (nextStage === "Adult" && member.occupation === "University Student") member.occupation = "Professional";
+  }
+}
+
+function maybeApplyLifeEnd(state, member) {
+  if (!member.alive) return;
+  if (member.age < 88) return;
+  const chance = member.age >= 100 ? 0.22 : 0.04 + (member.age - 88) * 0.01;
+  if (seededRandom(state) > chance) return;
+  member.alive = false;
+  member.status = "Deceased";
+  addFamilyEvent(state, { type: "Memorial", title: `${member.name} passed away`, members: [member.id] });
+  state.family.inheritance.pending.unshift({
+    id: makeId("inherit"),
+    memberId: member.id,
+    eligibleHeirs: (member.childrenIds || []).length ? [...member.childrenIds] : [state.family.playerCharacterId],
+    assets: {
+      cash: Math.round((state.player.bankBalance + state.player.money) * 0.08),
+      properties: [...state.player.ownedProperties],
+      items: Object.entries(state.inventory || {})
+        .filter(([, qty]) => qty > 0)
+        .slice(0, 3)
+        .map(([id]) => id)
+    }
+  });
+}
+
+function tickFamilyDaily(state) {
+  ensureFamilyState(state);
+  seedNpcFamilies(state);
+  maybeStartPregnancy(state);
+  const family = state.family;
+  if (family.pregnancy.active) {
+    family.pregnancy.progressDays += 1;
+    const progress = family.pregnancy.progressDays / Math.max(1, family.pregnancy.totalDays);
+    family.pregnancy.stage = progress < 0.34 ? "Early" : progress < 0.67 ? "Middle" : "Late";
+    family.pregnancy.health = clamp(family.pregnancy.health + (progress > 0.7 ? -1 : 0), 45, 100);
+    family.pregnancy.mood = clamp(family.pregnancy.mood + (progress > 0.7 ? -1 : 1), 40, 100);
+    if (family.pregnancy.progressDays % 5 === 0) {
+      const title = ["Doctor Appointment", "Preparing Home", "Buying Baby Items", "Choosing Name", "Preparing Nursery"][
+        Math.floor(family.pregnancy.progressDays / 5) % 5
+      ];
+      addFamilyEvent(state, { type: "Prenatal", title });
+      family.pregnancy.appointments.unshift({ day: state.time.day + 2, title });
+    }
+    if (progress > 0.3) state.player.energy = clamp(state.player.energy - 1, 0, 100);
+    if (progress > 0.6) setNeeds(state, { mood: -1 });
+    if (family.pregnancy.progressDays >= family.pregnancy.totalDays) closePregnancyWithBirth(state);
+  }
+
+  for (const member of Object.values(family.members)) {
+    if (!member.alive) continue;
+    if (member.birthday?.month === state.time.month && member.birthday?.day === state.time.monthDay && member.lastBirthdayDay !== state.time.day) {
+      member.age += 1;
+      member.lastBirthdayDay = state.time.day;
+      updateMemberLifeStage(member);
+      addFamilyEvent(state, { type: "Birthday", title: `${member.name} birthday`, members: [member.id] });
+      maybeApplyLifeEnd(state, member);
+      if (member.id === family.playerCharacterId) {
+        state.life.age = member.age;
+        state.life.relationshipStatus = state.life.relationshipStatus || "Single";
+      }
+    }
+    if (member.lifeStage === "Child" || member.lifeStage === "Teen") member.education.points += 1;
+    if (member.lifeStage === "Young Adult" && member.education.track === "University") member.education.points += 2;
+  }
+
+  const primaryHousehold = family.households[family.playerHouseholdId];
+  if (primaryHousehold) {
+    const members = primaryHousehold.memberIds.map((id) => family.members[id]).filter(Boolean);
+    const childCount = members.filter((m) => ["Baby", "Toddler", "Child", "Teen"].includes(m.lifeStage) && m.alive).length;
+    const adults = members.filter((m) => ["Young Adult", "Adult", "Elder"].includes(m.lifeStage) && m.alive).length;
+    const prop = state.properties.find((entry) => entry.id === primaryHousehold.homePropertyId) || state.properties.find((entry) => entry.id === state.life.residence?.propertyId);
+    const capacity = householdCapacityFromProperty(prop?.type || state.life.residence?.type || "Apartment");
+    if (members.length > capacity) setNeeds(state, { mood: -2 });
+    primaryHousehold.finances.food = 25 + childCount * 10 + adults * 6;
+    primaryHousehold.finances.education = childCount * 14;
+    primaryHousehold.finances.healthcare = 10 + childCount * 4;
+    primaryHousehold.finances.child = childCount * 18;
+    primaryHousehold.finances.housing = prop?.owned ? 0 : prop?.rentWeekly || 0;
+    primaryHousehold.finances.luxury = Math.max(0, Math.round(state.player.money * 0.002));
+    primaryHousehold.finances.expenses =
+      primaryHousehold.finances.food +
+      primaryHousehold.finances.education +
+      primaryHousehold.finances.healthcare +
+      primaryHousehold.finances.child +
+      primaryHousehold.finances.housing +
+      primaryHousehold.finances.luxury;
+    primaryHousehold.finances.income = Math.max(0, Math.round(state.life.finance.weeklyIncome / 7));
+  }
+
+  family.legacy.wealth = state.player.money + state.player.bankBalance;
+  family.legacy.reputation = state.family.socialStatus.reputation + state.player.influence;
+  family.legacy.properties = [...state.player.ownedProperties];
+  family.legacy.generation = Math.max(
+    1,
+    ...Object.values(family.members).map((m) => Number.isFinite(m.meta?.generation) ? m.meta.generation : 1)
+  );
 }
 
 function travelTransactionCategory(source = "") {
@@ -633,9 +1209,22 @@ function addCalendarEvent(state, entry) {
 }
 
 function updateNpcRoutines(state) {
+  ensureFamilyState(state);
   const hour = state.time.hour;
   const isWeekend = state.time.weekDay === 6 || state.time.weekDay === 7;
   for (const npc of state.npcs) {
+    const familyMember = state.family.members[`char-${npc.id}`];
+    if (familyMember?.alive === false) continue;
+    if (familyMember && ["Baby", "Toddler", "Child"].includes(familyMember.lifeStage)) {
+      npc.location = hour >= 8 && hour < 16 ? "residential-school" : familyMember.homeLocationId || "safehouse";
+      familyMember.locationId = npc.location;
+      continue;
+    }
+    if (familyMember && familyMember.lifeStage === "Teen") {
+      npc.location = hour >= 8 && hour < 15 ? "residential-school" : hour >= 16 && hour < 21 ? "old-town" : familyMember.homeLocationId || "safehouse";
+      familyMember.locationId = npc.location;
+      continue;
+    }
     if (hour >= 0 && hour < 7) {
       npc.location = npc.role.includes("security") ? npc.location : "safehouse";
       continue;
@@ -654,6 +1243,7 @@ function updateNpcRoutines(state) {
       if (npc.role.includes("nightclub")) npc.location = "underground-club";
       continue;
     }
+    if (familyMember) familyMember.locationId = npc.location;
   }
 }
 
@@ -714,6 +1304,7 @@ function nextTurn(state, turns = 1) {
       refreshDailyQuests(state);
       handleRentAndBills(state);
       trackBirthday(state);
+      tickFamilyDaily(state);
       addNotification(state, "System", `A new day begins in NARCOS CITY (Day ${state.time.day}).`, "info");
     }
     syncWorldClock(state);
@@ -743,6 +1334,7 @@ function nextTurn(state, turns = 1) {
   state.turn = state.time.turn;
   updateLifestyle(state);
   updateSocialStatus(state);
+  syncPlayerFamilyMember(state);
 }
 
 function advanceByMinutes(state, minutes = 60) {
@@ -1075,6 +1667,7 @@ export function createInitialState() {
         children: []
       }
     },
+    family: {},
     life: {
       age: 27,
       birthday: { day: 1, month: 1, year: START_YEAR - 27 },
@@ -1173,6 +1766,9 @@ export function createInitialState() {
 
   syncWorldClock(state);
   ensureLifeState(state);
+  ensureFamilyState(state);
+  seedPlayerFamily(state);
+  seedNpcFamilies(state);
   updateLifestyle(state);
   updateSocialStatus(state);
   updateFinanceSummary(state);
@@ -1201,6 +1797,7 @@ function migrateState(rawState) {
     prison: { ...base.prison, ...rawState.prison },
     credit: { ...base.credit, ...rawState.credit },
     social: { ...base.social, ...rawState.social },
+    family: { ...base.family, ...rawState.family },
     relationshipsFoundation: {
       ...base.relationshipsFoundation,
       ...rawState.relationshipsFoundation,
@@ -1282,6 +1879,9 @@ function migrateState(rawState) {
   merged.settings.language = ["ru", "en"].includes(merged.settings.language) ? merged.settings.language : "ru";
   merged.credit.creditLimit = Math.max(BALANCE.credit.maxCreditByLevel, stateCreditLimitForLevel(merged.player.level));
   ensureLifeState(merged);
+  ensureFamilyState(merged);
+  seedPlayerFamily(merged);
+  seedNpcFamilies(merged);
   merged.life.needs.hunger = merged.player.hunger;
   merged.life.needs.hygiene = merged.player.hygiene;
   merged.life.needs.mood = merged.player.mood;
@@ -1305,6 +1905,7 @@ function migrateState(rawState) {
   updateLifestyle(merged);
   updateSocialStatus(merged);
   updateFinanceSummary(merged);
+  syncPlayerFamilyMember(merged);
   return merged;
 }
 
@@ -1313,12 +1914,16 @@ export function normalizeState(rawState) {
 }
 
 export function createPlayer(state, name) {
+  ensureLifeState(state);
+  ensureFamilyState(state);
   const clean = String(name || "").trim();
   state.player.name = (clean || state.player.name || "La Reina").slice(0, 24);
+  state.family.families[state.family.playerFamilyId].name = `${state.player.name} Family`;
   state.meta.hasCreatedCharacter = true;
   state.player.currentDistrict = state.selectedDistrictId;
   state.player.currentLocation = state.currentLocationId;
   state.credit.creditLimit = stateCreditLimitForLevel(state.player.level);
+  syncPlayerFamilyMember(state);
   addNotification(state, "System", `Welcome, ${state.player.name}. The city now knows your name.`, "success");
   refreshQuests(state);
   refreshAchievements(state);
@@ -1330,7 +1935,7 @@ export function resetGame() {
 }
 
 export function navigateTo(state, screen) {
-  const allowed = ["main-menu", "city", "districts", "profile", "inventory", "quests", "settings"];
+  const allowed = ["main-menu", "city", "districts", "profile", "inventory", "quests", "family", "settings"];
   state.currentScreen = allowed.includes(screen) ? screen : "city";
   return state;
 }
@@ -1901,6 +2506,7 @@ export function cycleVehicle(state, silent = false) {
 export function buyProperty(state, propertyId) {
   if (blockedByPrison(state)) return state;
   ensureLifeState(state);
+  ensureFamilyState(state);
   const property = state.properties.find((entry) => entry.id === propertyId);
   if (!property) {
     addNotification(state, "Property", "Property not found.", "error");
@@ -1927,10 +2533,14 @@ export function buyProperty(state, propertyId) {
     rentOverdueDays: 0
   };
   state.statistics.propertiesOwned = state.player.ownedProperties.length;
+  if (state.family.households[state.family.playerHouseholdId]) {
+    state.family.households[state.family.playerHouseholdId].homePropertyId = property.id;
+  }
   addInfluence(state, property.prestige);
   addGeneralReputation(state, "city", Math.max(1, Math.floor(property.prestige / 2)));
   setNeeds(state, { mood: 5 });
   addCalendarEvent(state, { type: "Property", title: `Purchased ${property.name}` });
+  addFamilyEvent(state, { type: "Family Home", title: `Moved into ${property.name}` });
   addXP(state, 18);
   refreshQuests(state);
   refreshAchievements(state);
@@ -1941,6 +2551,7 @@ export function buyProperty(state, propertyId) {
 export function rentProperty(state, propertyId, mode = "weekly") {
   if (blockedByPrison(state)) return state;
   ensureLifeState(state);
+  ensureFamilyState(state);
   const property = state.properties.find((entry) => entry.id === propertyId);
   if (!property) {
     addNotification(state, "Housing", "Property not found.", "error");
@@ -1963,6 +2574,9 @@ export function rentProperty(state, propertyId, mode = "weekly") {
     rentDueDay: state.time.day + (mode === "monthly" ? 30 : 7),
     rentOverdueDays: 0
   };
+  if (state.family.households[state.family.playerHouseholdId]) {
+    state.family.households[state.family.playerHouseholdId].homePropertyId = property.id;
+  }
   property.rented = true;
   setNeeds(state, { mood: 4 });
   addCalendarEvent(state, { type: "Housing", title: `Rented ${property.name}` });
@@ -2059,6 +2673,7 @@ export function performLifeActivity(state, activityId, payload = {}) {
 export function startDateWithNpc(state, npcId, venue = "restaurant") {
   if (blockedByPrison(state)) return state;
   ensureLifeState(state);
+  ensureFamilyState(state);
   const npc = state.npcs.find((entry) => entry.id === npcId);
   if (!npc) {
     addNotification(state, "Social", "Date target unavailable.", "error");
@@ -2100,6 +2715,21 @@ export function startDateWithNpc(state, npcId, venue = "restaurant") {
     spouseRel.history = spouseRel.history.slice(0, 30);
     addGeneralReputation(state, "city", -1);
     addNotification(state, "Social", "Relationship conflict triggered by external romance.", "error");
+    if (spouseRel.trust <= 20) {
+      const spouseMember = state.family?.members[`char-${state.relationshipsFoundation.marriage.partnerId}`];
+      const playerMember = state.family?.members[state.family?.playerCharacterId || ""];
+      if (spouseMember && playerMember) {
+        playerMember.spouseId = null;
+        spouseMember.spouseId = null;
+        playerMember.partnerId = null;
+        spouseMember.partnerId = null;
+        spouseMember.householdId = `house-split-${spouseMember.id}`;
+        addMemberToFamily(state, spouseMember);
+        addFamilyEvent(state, { type: "Family Conflict", title: "Marriage separation", members: [playerMember.id, spouseMember.id] });
+      }
+      state.relationshipsFoundation.marriage = null;
+      state.life.relationshipStatus = "Single";
+    }
   }
   setNeeds(state, { hunger: -5, hygiene: -2, mood: Math.max(2, Math.round(delta / 2)) });
   addCalendarEvent(state, { type: "Date", title: `${npc.name} · ${venue}` });
@@ -2111,6 +2741,7 @@ export function startDateWithNpc(state, npcId, venue = "restaurant") {
 
 export function proposeToNpc(state, npcId) {
   ensureLifeState(state);
+  ensureFamilyState(state);
   const npc = state.npcs.find((entry) => entry.id === npcId);
   const relation = ensureRelation(state, npcId);
   if (!npc) {
@@ -2128,13 +2759,36 @@ export function proposeToNpc(state, npcId) {
   relation.romanceStage = "engaged";
   state.relationshipsFoundation.partnerId = npcId;
   state.life.relationshipStatus = "Engaged";
+  const playerMember = state.family.members[state.family.playerCharacterId];
+  const partnerMemberId = `char-${npcId}`;
+  if (!state.family.members[partnerMemberId]) {
+    addMemberToFamily(
+      state,
+      createFamilyMember(state, {
+        id: partnerMemberId,
+        name: npc.name,
+        age: 30,
+        familyId: state.family.playerFamilyId,
+        householdId: state.family.playerHouseholdId,
+        occupation: npc.role,
+        locationId: npc.location,
+        meta: { npcId: npc.id, generation: 1 }
+      })
+    );
+  }
+  if (playerMember) {
+    playerMember.partnerId = partnerMemberId;
+    state.family.members[partnerMemberId].partnerId = playerMember.id;
+  }
   addCalendarEvent(state, { type: "Engagement", title: `Engaged to ${npc.name}` });
+  addFamilyEvent(state, { type: "Engagement", title: `${npc.name} accepted proposal`, members: [state.family.playerCharacterId, partnerMemberId] });
   addNotification(state, "Social", `Proposal accepted by ${npc.name}.`, "success");
   return state;
 }
 
 export function hostSocialEvent(state, eventType = "party") {
   ensureLifeState(state);
+  ensureFamilyState(state);
   const eventCost = {
     birthday: 180,
     dinner: 220,
@@ -2169,6 +2823,18 @@ export function hostSocialEvent(state, eventType = "party") {
       year: state.time.year
     };
     state.life.relationshipStatus = "Married";
+    const playerMember = state.family.members[state.family.playerCharacterId];
+    const partnerMember = state.family.members[`char-${partnerId}`];
+    if (playerMember && partnerMember) {
+      playerMember.spouseId = partnerMember.id;
+      playerMember.partnerId = partnerMember.id;
+      partnerMember.spouseId = playerMember.id;
+      partnerMember.partnerId = playerMember.id;
+      const household = state.family.households[state.family.playerHouseholdId];
+      if (household && !household.memberIds.includes(partnerMember.id)) household.memberIds.push(partnerMember.id);
+      partnerMember.householdId = state.family.playerHouseholdId;
+    }
+    addFamilyEvent(state, { type: "Wedding", title: `Wedding with ${partner.name}`, members: [state.family.playerCharacterId, `char-${partnerId}`] });
     moodBoost = 12;
     repBoost = 3;
   }
@@ -2177,9 +2843,92 @@ export function hostSocialEvent(state, eventType = "party") {
   addGeneralReputation(state, "city", repBoost);
   addInfluence(state, 1 + Math.floor(repBoost / 2));
   addCalendarEvent(state, { type: "Event", title: eventType });
+  addFamilyEvent(state, { type: "Family Event", title: eventType });
   advanceByMinutes(state, eventType === "wedding" ? 420 : 180);
   addNotification(state, "Social", `${eventType} completed.`, "success");
   return state;
+}
+
+export function performFamilyInteraction(state, memberId, actionId = "talk") {
+  ensureFamilyState(state);
+  const member = state.family.members[memberId];
+  if (!member || !member.alive) {
+    addNotification(state, "Family", "Family member unavailable.", "error");
+    return state;
+  }
+  const effects = {
+    talk: { affection: 2, trust: 2, closeness: 2, conflict: -1, mood: 1 },
+    visit: { affection: 3, trust: 2, closeness: 3, conflict: -1, mood: 2 },
+    call: { affection: 1, trust: 1, closeness: 1, conflict: 0, mood: 1 },
+    "family-dinner": { affection: 3, trust: 2, closeness: 4, conflict: -2, mood: 3, cost: 120 },
+    gift: { affection: 4, trust: 2, closeness: 2, conflict: -1, mood: 2, cost: 180 },
+    comfort: { affection: 3, trust: 3, closeness: 2, conflict: -2, mood: 2 },
+    apologize: { affection: 1, trust: 2, closeness: 1, conflict: -4, mood: 1 },
+    reconcile: { affection: 4, trust: 5, closeness: 3, conflict: -6, mood: 3 }
+  };
+  const effect = effects[actionId] || effects.talk;
+  if (effect.cost && !addWallet(state, -effect.cost, "event", `Family ${actionId}`, "expense")) {
+    addNotification(state, "Family", "Insufficient money for family action.", "error");
+    return state;
+  }
+  member.familyRelationStats.affection = clamp(member.familyRelationStats.affection + effect.affection, 0, 100);
+  member.familyRelationStats.trust = clamp(member.familyRelationStats.trust + effect.trust, 0, 100);
+  member.familyRelationStats.closeness = clamp(member.familyRelationStats.closeness + effect.closeness, 0, 100);
+  member.familyRelationStats.conflict = clamp(member.familyRelationStats.conflict + effect.conflict, 0, 100);
+  setNeeds(state, { mood: effect.mood || 0 });
+  addFamilyEvent(state, { type: "Interaction", title: `${actionId} with ${member.name}`, members: [member.id] });
+  advanceByMinutes(state, actionId === "visit" ? 90 : 45);
+  addNotification(state, "Family", `${actionId} with ${member.name} completed.`, "success");
+  return state;
+}
+
+export function getFamilyOverview(state) {
+  ensureFamilyState(state);
+  syncPlayerFamilyMember(state);
+  const family = state.family;
+  const members = Object.values(family.members)
+    .sort((a, b) => (a.meta.generation || 1) - (b.meta.generation || 1) || b.age - a.age)
+    .map((member) => ({
+      id: member.id,
+      name: member.name,
+      age: member.age,
+      relationship:
+        member.id === family.playerCharacterId
+          ? "Player"
+          : member.motherId === family.playerCharacterId || member.fatherId === family.playerCharacterId
+            ? "Child"
+            : member.childrenIds?.includes(family.playerCharacterId)
+              ? "Parent"
+              : member.siblingIds?.includes(family.playerCharacterId)
+                ? "Sibling"
+                : member.spouseId === family.playerCharacterId
+                  ? "Spouse"
+                  : member.partnerId === family.playerCharacterId
+                    ? "Partner"
+                    : "Relative",
+      lifeStage: member.lifeStage,
+      occupation: member.occupation,
+      location: member.locationId,
+      status: member.alive ? member.status : "Deceased",
+      generation: member.meta.generation || 1,
+      motherId: member.motherId,
+      fatherId: member.fatherId,
+      childrenIds: member.childrenIds || []
+    }));
+  const household = family.households[family.playerHouseholdId];
+  return {
+    familyName: family.families[family.playerFamilyId]?.name || `${state.player.name} Family`,
+    generation: family.legacy.generation,
+    familyWealth: family.legacy.wealth,
+    familyReputation: family.legacy.reputation,
+    mainResidence: household?.homePropertyId || state.life.residence?.type || "None",
+    members,
+    events: family.events.slice(0, 20),
+    memories: family.memories.slice(0, 20),
+    finances: household?.finances || { income: 0, expenses: 0, housing: 0, food: 0, education: 0, healthcare: 0, child: 0, luxury: 0 },
+    pregnancy: family.pregnancy,
+    inheritance: family.inheritance
+  };
 }
 
 function collectBusinessIncome(state, business) {

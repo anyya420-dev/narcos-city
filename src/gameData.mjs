@@ -1,4 +1,4 @@
-export const SAVE_VERSION = 7;
+export const SAVE_VERSION = 8;
 export const TURNS_PER_DAY = 24;
 
 export const BALANCE = {
