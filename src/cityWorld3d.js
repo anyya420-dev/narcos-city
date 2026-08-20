@@ -650,6 +650,7 @@ export function mountCityWorld3d({ container, state, onInteract, onMenuAction, o
   let mouseX = 0;
   let mouseY = 0;
   let paused = false;
+  let lastLoopPausedState = null;
   let cameraDistance = CAMERA_DISTANCE;
   let footstepTimer = 0;
   const cameraPos = new THREE.Vector3();
@@ -740,6 +741,9 @@ export function mountCityWorld3d({ container, state, onInteract, onMenuAction, o
     if (event.code === "KeyS" || event.code === "ArrowDown") keys.down = true;
     if (event.code === "KeyA" || event.code === "ArrowLeft") keys.left = true;
     if (event.code === "KeyD" || event.code === "ArrowRight") keys.right = true;
+    if (event.code === "KeyW" || event.code === "ArrowUp" || event.code === "KeyS" || event.code === "ArrowDown" || event.code === "KeyA" || event.code === "ArrowLeft" || event.code === "KeyD" || event.code === "ArrowRight") {
+      console.debug(`[PAUSE] MOVE_INPUT_ACCEPTED code=${event.code} paused=${paused}`);
+    }
     if (event.code === "ShiftLeft" || event.code === "ShiftRight") sprintHeld = true;
     if (event.code === "Space" && Math.abs(player.position.y) < 0.001) velocityY = JUMP_VELOCITY;
     if (event.code === "KeyE") {
@@ -788,6 +792,7 @@ export function mountCityWorld3d({ container, state, onInteract, onMenuAction, o
   const joystick = createJoystick(moveStick, moveKnob);
   const look = createLookPad(lookPad, (dx, dy) => {
     if (paused) return;
+    console.debug(`[PAUSE] LOOK_INPUT_APPLIED dx=${Math.round(dx)} dy=${Math.round(dy)} paused=${paused}`);
     yaw -= dx * sensitivity;
     pitch = Math.max(-0.98, Math.min(-0.07, pitch - dy * sensitivity * 0.8));
   });
@@ -905,9 +910,17 @@ export function mountCityWorld3d({ container, state, onInteract, onMenuAction, o
     try {
       const dt = Math.min(0.05, clock.getDelta());
       if (paused) {
+        if (lastLoopPausedState !== true) {
+          console.debug("[PAUSE] LOOP_PAUSED");
+          lastLoopPausedState = true;
+        }
         renderer.render(scene, camera);
         requestAnimationFrame(animate);
         return;
+      }
+      if (lastLoopPausedState !== false) {
+        console.debug("[PAUSE] LOOP_RUNNING");
+        lastLoopPausedState = false;
       }
 
       const padX = joystick.state.x;
