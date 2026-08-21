@@ -8,6 +8,15 @@ import {
 } from "./cityWorldFoundation.mjs";
 import { LOCATIONS } from "./gameData.mjs";
 
+/** Minimal HTML escape for user-supplied strings inserted via innerHTML. */
+function esc(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
+}
+
 const PLAYER_RADIUS = 0.58;
 const WALK_SPEED = 4.8;
 const RUN_SPEED = 8.9;
@@ -819,7 +828,7 @@ export function mountCityWorld3d({ container, state, onInteract, onMenuAction, o
 
         <!-- Premium HUD left: health, energy, xp, level -->
         <div class="hud-panel hud-left">
-          <div class="hud-name" id="hud-name">${initName}</div>
+          <div class="hud-name" id="hud-name">${esc(initName)}</div>
           <div class="hud-row">
             <span class="hud-ico">♥</span>
             <div class="hud-bar-track"><div class="hud-bar-fill hud-hp" id="hud-hp-fill" style="width:${Math.min(100,initHp)}%"></div></div>
