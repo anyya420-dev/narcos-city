@@ -1,0 +1,86 @@
+name: Build, Test and Deploy to GitHub Pages
+
+on:
+  push:
+    branches:
+      - main
+      - copilot/build-narcos-city-rpg
+      - copilot/fix-interact-pause-navigation-bugs
+      - copilot/narcos-city-overhaul
+      - copilot/research-narcos-city-implementation
+    paths:
+      - index.html
+      - styles.css
+      - src/**
+      - tests/**
+      - package.json
+      - .github/workflows/deploy-pages.yml
+      - .nojekyll
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  test:
+    name: Run tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run unit tests
+        run: npm test
+
+      - name: Smoke check local serve
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/pages-root
+          mkdir -p /tmp/pages-root/narcos-city
+          cp -R index.html styles.css src .nojekyll /tmp/pages-root/narcos-city/
+
+          python3 -m http.server 4173 --directory /tmp/pages-root >/tmp/pages-http.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          sleep 1
+
+          curl -fsS http://127.0.0.1:4173/narcos-city/        | grep -q 'NARCOS CITY'
+          curl -fsS http://127.0.0.1:4173/narcos-city/styles.css >/dev/null
+          curl -fsS http://127.0.0.1:4173/narcos-city/src/app.js  >/dev/null
+          echo "Smoke check passed."
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/copilot/narcos-city-overhaul' || github.ref == 'refs/heads/copilot/research-narcos-city-implementation'
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Prepare site
+        run: |
+          mkdir -p _site
+          cp -R index.html styles.css src icons .nojekyll manifest.webmanifest sw.js _site/
+          echo "Site files prepared."
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
