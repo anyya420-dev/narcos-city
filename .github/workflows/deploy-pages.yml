@@ -7,6 +7,7 @@ on:
       - copilot/build-narcos-city-rpg
       - copilot/fix-interact-pause-navigation-bugs
       - copilot/narcos-city-overhaul
+      - copilot/research-narcos-city-implementation
     paths:
       - index.html
       - styles.css
@@ -58,7 +59,7 @@ jobs:
     name: Deploy to GitHub Pages
     needs: test
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/copilot/narcos-city-overhaul'
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/copilot/narcos-city-overhaul' || github.ref == 'refs/heads/copilot/research-narcos-city-implementation'
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}

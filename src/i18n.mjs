@@ -41,7 +41,8 @@ const L = {
       tapInteract: "Нажмите ВЗАИМОДЕЙСТВИЕ",
       keyboardInteract: "[E] или ВЗАИМОДЕЙСТВИЕ",
       exploreHint: "Изучайте город и подходите к отмеченным точкам",
-      noTarget: "Рядом нет объекта для взаимодействия."
+      noTarget: "Рядом нет объекта для взаимодействия.",
+      enter: "Войти в"
     },
     notices: {
       saved: "Прогресс сохранён.",
@@ -163,7 +164,32 @@ const L = {
       followers: "подписчиков",
       romanticPartner: "Партнёр",
       districtPopulation: "Население района"
-    }
+    },
+    inventory: {
+      title: "Инвентарь · Рынок · Активы",
+      dailyLife: "Повседневная жизнь",
+      section: "Инвентарь",
+      empty: "Инвентарь пуст.",
+      propertyMarket: "Рынок недвижимости",
+      vehicleMarket: "Транспорт",
+      businessSection: "Бизнес",
+      buy: "Купить",
+      owned: "Куплено",
+      rentWeekly: "Аренда (нед.)",
+      rentWeeklyLabel: "Аренда/нед.",
+      rentMonthlyLabel: "Аренда/мес.",
+      securityUpgrade: "Охрана+",
+      luxuryUpgrade: "Люкс+",
+      depositAmount: "Депозит $200",
+      withdrawAmount: "Снятие $200",
+      payRent: "Оплатить аренду",
+      cycleVehicle: "Сменить транспорт",
+      upgradeBtn: "Улучшить",
+      upgradeSafehouse: "Улучшить убежище",
+      marketSection: "Рынок"
+    },
+    life: { eat: "Поесть", sleep: "Поспать", rest: "Отдохнуть", shower: "Принять душ", study: "Учиться", exercise: "Тренироваться" },
+    npc: { chat: "Поговорить", hangOut: "Провести время", flirt: "Флиртовать" }
   },
   en: {
     nav: { city: "CITY", map: "MAP", quests: "QUESTS", inventory: "INVENTORY", profile: "PROFILE", family: "FAMILY", settings: "SETTINGS" },
@@ -204,7 +230,8 @@ const L = {
       tapInteract: "Tap INTERACT",
       keyboardInteract: "[E] or Tap INTERACT",
       exploreHint: "Explore and approach highlighted points",
-      noTarget: "No nearby object to interact with."
+      noTarget: "No nearby object to interact with.",
+      enter: "Enter"
     },
     notices: {
       saved: "Progress saved.",
@@ -326,7 +353,32 @@ const L = {
       followers: "followers",
       romanticPartner: "Romantic Partner",
       districtPopulation: "District Population"
-    }
+    },
+    inventory: {
+      title: "Inventory · Market · Assets",
+      dailyLife: "Daily Life",
+      section: "Inventory",
+      empty: "Inventory empty.",
+      propertyMarket: "Property Market",
+      vehicleMarket: "Vehicles",
+      businessSection: "Businesses",
+      buy: "Buy",
+      owned: "Owned",
+      rentWeekly: "Rent Weekly",
+      rentWeeklyLabel: "Rent Weekly",
+      rentMonthlyLabel: "Rent Monthly",
+      securityUpgrade: "Security+",
+      luxuryUpgrade: "Luxury+",
+      depositAmount: "Deposit $200",
+      withdrawAmount: "Withdraw $200",
+      payRent: "Pay Rent",
+      cycleVehicle: "Cycle Vehicle",
+      upgradeBtn: "Upgrade",
+      upgradeSafehouse: "Upgrade Safehouse",
+      marketSection: "Market"
+    },
+    life: { eat: "Eat", sleep: "Sleep", rest: "Rest", shower: "Shower", study: "Study", exercise: "Exercise" },
+    npc: { chat: "Chat", hangOut: "Hang Out", flirt: "Flirt" }
   }
 };
 
@@ -376,7 +428,8 @@ export function cityWorldText(state) {
     "prompt.tapInteract",
     "prompt.keyboardInteract",
     "prompt.exploreHint",
-    "prompt.noTarget"
+    "prompt.noTarget",
+    "prompt.enter"
   ];
   return Object.fromEntries(entries.map((key) => [key, t(state, key)]));
 }

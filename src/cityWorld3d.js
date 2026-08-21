@@ -993,7 +993,9 @@ export function mountCityWorld3d({ container, state, onInteract, onMenuAction, o
               districtId: entry.districtId,
               x: entry.door.x,
               z: entry.door.z,
-              prompt: entry.prompt,
+              prompt: entry.enterable
+                ? `${t("prompt.enter", "Enter")} ${entry.name}`
+                : (entry.prompt || entry.name),
               interactionType: "door",
               enterable: entry.enterable,
               locationType: entry.locationType

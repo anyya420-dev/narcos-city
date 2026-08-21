@@ -775,7 +775,7 @@ function renderInventory() {
         <h4>${escapeHtml(item.name)}</h4>
         <p class="muted">${escapeHtml(item.category)} · ${currency(item.price)}</p>
         <div class="actions">
-          <button data-action="buy-item" data-item-id="${item.id}" data-price="${item.price}">Buy</button>
+          <button data-action="buy-item" data-item-id="${item.id}" data-price="${item.price}">${t(state, "inventory.buy", "Buy")}</button>
         </div>
       </article>
     `
@@ -790,7 +790,7 @@ function renderInventory() {
         <p class="muted">${escapeHtml(vehicle.category)} · Speed ${vehicle.speed} · Handling ${vehicle.handling || 0} · Durability ${vehicle.durability || 0}</p>
         <p class="muted">Luxury ${vehicle.luxury || 0} · Storage ${vehicle.storage || 0} · Prestige ${vehicle.prestige || 0}</p>
         <div class="actions">
-          ${vehicle.owned ? "" : `<button data-action="buy-vehicle" data-vehicle-id="${vehicle.id}">Buy ${currency(vehicle.price)}</button>`}
+          ${vehicle.owned ? "" : `<button data-action="buy-vehicle" data-vehicle-id="${vehicle.id}">${t(state, "inventory.buy", "Buy")} ${currency(vehicle.price)}</button>`}
           ${vehicle.owned ? `<button data-action="select-vehicle" data-vehicle-id="${vehicle.id}">Select</button>` : ""}
           ${vehicle.owned ? `<button data-action="repair-vehicle" data-vehicle-id="${vehicle.id}">${t(state, "stage4.repair", "Repair")}</button>` : ""}
           ${vehicle.owned ? `<button data-action="vehicle-upgrade" data-vehicle-id="${vehicle.id}" data-upgrade-category="engine">${t(state, "stage4.engineUp", "Engine+")}</button>` : ""}
@@ -808,14 +808,14 @@ function renderInventory() {
       (property) => `
       <article class="card${property.owned ? " active-location" : ""}">
         <h4>${escapeHtml(property.name)}</h4>
-        <p class="muted">${escapeHtml(property.type)} · ${escapeHtml(property.district)} · ${property.owned ? "Owned" : currency(property.price)}</p>
+        <p class="muted">${escapeHtml(property.type)} · ${escapeHtml(property.district)} · ${property.owned ? t(state, "inventory.owned", "Owned") : currency(property.price)}</p>
         <p class="muted">Comfort ${property.comfort} · Security ${property.security} · Storage ${property.storage} · Prestige ${property.prestige}</p>
-        <p class="muted">Rent Weekly ${currency(property.rentWeekly || 0)} · Rent Monthly ${currency(property.rentMonthly || 0)}</p>
+        <p class="muted">${t(state, "inventory.rentWeeklyLabel", "Rent Weekly")} ${currency(property.rentWeekly || 0)} · ${t(state, "inventory.rentMonthlyLabel", "Rent Monthly")} ${currency(property.rentMonthly || 0)}</p>
         <div class="actions">
-          ${property.owned ? "" : `<button data-action="buy-property" data-property-id="${property.id}">Buy</button>`}
-          ${property.owned ? "" : `<button data-action="rent-property" data-property-id="${property.id}" data-rent-mode="weekly">Rent Weekly</button>`}
-          ${property.owned ? `<button data-action="upgrade-property" data-property-id="${property.id}" data-property-upgrade="security">Security+</button>` : ""}
-          ${property.owned ? `<button data-action="upgrade-property" data-property-id="${property.id}" data-property-upgrade="luxury">Luxury+</button>` : ""}
+          ${property.owned ? "" : `<button data-action="buy-property" data-property-id="${property.id}">${t(state, "inventory.buy", "Buy")}</button>`}
+          ${property.owned ? "" : `<button data-action="rent-property" data-property-id="${property.id}" data-rent-mode="weekly">${t(state, "inventory.rentWeekly", "Rent Weekly")}</button>`}
+          ${property.owned ? `<button data-action="upgrade-property" data-property-id="${property.id}" data-property-upgrade="security">${t(state, "inventory.securityUpgrade", "Security+")}</button>` : ""}
+          ${property.owned ? `<button data-action="upgrade-property" data-property-id="${property.id}" data-property-upgrade="luxury">${t(state, "inventory.luxuryUpgrade", "Luxury+")}</button>` : ""}
         </div>
       </article>
     `
@@ -824,27 +824,27 @@ function renderInventory() {
 
   root.innerHTML = `
     <section class="card marble">
-      <h2>Inventory · Market · Assets</h2>
+      <h2>${t(state, "inventory.title", "Inventory · Market · Assets")}</h2>
       <p class="muted">Cash ${currency(state.player.money)} · Bank ${currency(state.player.bankBalance)}</p>
       <p class="muted">${t(state, "stage4.garage", "Garage")} ${state.garage?.storedVehicleIds?.length || 0}/${state.garage?.capacity || 2} · ${t(state, "stage4.netWorth", "Net Worth")} ${currency(state.economy?.netWorth || 0)}</p>
       <div class="actions">
-        <button data-action="bank-deposit" data-amount="200">Deposit $200</button>
-        <button data-action="bank-withdraw" data-amount="200">Withdraw $200</button>
+        <button data-action="bank-deposit" data-amount="200">${t(state, "inventory.depositAmount", "Deposit $200")}</button>
+        <button data-action="bank-withdraw" data-amount="200">${t(state, "inventory.withdrawAmount", "Withdraw $200")}</button>
         <button data-action="bank-transfer" data-transfer-target="family" data-amount="150">${t(state, "stage4.transferFamily", "Transfer Family")} $150</button>
         <button data-action="bank-transfer" data-transfer-target="business" data-amount="200">${t(state, "stage4.transferBusiness", "Transfer Business")} $200</button>
-        <button data-action="pay-rent">Pay Rent</button>
-        <button data-action="select-vehicle">Cycle Vehicle</button>
+        <button data-action="pay-rent">${t(state, "inventory.payRent", "Pay Rent")}</button>
+        <button data-action="select-vehicle">${t(state, "inventory.cycleVehicle", "Cycle Vehicle")}</button>
       </div>
     </section>
     <section class="card">
-      <h3>Daily Life</h3>
+      <h3>${t(state, "inventory.dailyLife", "Daily Life")}</h3>
       <div class="actions">
-        <button data-action="life-activity" data-life-activity="eat">Eat</button>
-        <button data-action="life-activity" data-life-activity="sleep">Sleep</button>
-        <button data-action="life-activity" data-life-activity="rest">Rest</button>
-        <button data-action="life-activity" data-life-activity="shower">Shower</button>
-        <button data-action="life-activity" data-life-activity="study">Study</button>
-        <button data-action="life-activity" data-life-activity="exercise">Exercise</button>
+        <button data-action="life-activity" data-life-activity="eat">${t(state, "life.eat", "Eat")}</button>
+        <button data-action="life-activity" data-life-activity="sleep">${t(state, "life.sleep", "Sleep")}</button>
+        <button data-action="life-activity" data-life-activity="rest">${t(state, "life.rest", "Rest")}</button>
+        <button data-action="life-activity" data-life-activity="shower">${t(state, "life.shower", "Shower")}</button>
+        <button data-action="life-activity" data-life-activity="study">${t(state, "life.study", "Study")}</button>
+        <button data-action="life-activity" data-life-activity="exercise">${t(state, "life.exercise", "Exercise")}</button>
       </div>
       <div class="actions">
         <button data-action="outfit" data-outfit-preset="Casual">${t(state, "ui.outfitCasual", "Casual")}</button>
@@ -857,10 +857,10 @@ function renderInventory() {
       </div>
       <p class="muted">Current outfit: ${escapeHtml(state.life?.wardrobe?.currentPreset || "Casual")} · Residence: ${escapeHtml(state.life?.residence?.type || "None")} (${escapeHtml(state.life?.residence?.ownership || "None")})</p>
     </section>
-    <section class="card"><h3>Inventory</h3>${inventoryCards || '<p class="muted">Inventory empty.</p>'}</section>
-    <section class="card"><h3>Market</h3>${marketCards}</section>
-    <section class="card"><h3>Vehicle Shop</h3>${vehicleCards}</section>
-    <section class="card"><h3>Property Market</h3>${propertyCards}</section>
+    <section class="card"><h3>${t(state, "inventory.section", "Inventory")}</h3>${inventoryCards || `<p class="muted">${t(state, "inventory.empty", "Inventory empty.")}</p>`}</section>
+    <section class="card"><h3>${t(state, "inventory.marketSection", "Market")}</h3>${marketCards}</section>
+    <section class="card"><h3>${t(state, "inventory.vehicleMarket", "Vehicles")}</h3>${vehicleCards}</section>
+    <section class="card"><h3>${t(state, "inventory.propertyMarket", "Property Market")}</h3>${propertyCards}</section>
   `;
 }
 
@@ -905,7 +905,7 @@ function renderQuests() {
         <p class="muted">Income ${currency(business.income)} · Expenses ${currency(business.expenses)} · Employees ${business.employees} · Security ${business.security || 0}</p>
         <div class="actions">
           <button data-action="business-action" data-business-id="${business.id}">${business.owned ? "Collect Income" : `Purchase ${currency(business.purchasePrice)}`}</button>
-          ${business.owned ? `<button data-action="business-upgrade" data-business-id="${business.id}">Upgrade</button>` : ""}
+          ${business.owned ? `<button data-action="business-upgrade" data-business-id="${business.id}">${t(state, "inventory.upgradeBtn", "Upgrade")}</button>` : ""}
           ${business.owned ? `<button data-action="business-hire" data-business-id="${business.id}">${t(state, "stage4.hire", "Hire")}</button>` : ""}
           ${business.owned ? `<button data-action="business-fire" data-business-id="${business.id}">${t(state, "stage4.fire", "Fire")}</button>` : ""}
           ${business.owned ? `<button data-action="business-security" data-business-id="${business.id}">${t(state, "stage4.security", "Security")}</button>` : ""}
@@ -1077,9 +1077,9 @@ function renderQuests() {
         <h4>${escapeHtml(npc.name)}</h4>
         <p class="muted">${escapeHtml(npc.role)} · ${rel.value} (${escapeHtml(rel.status)}) · Romance ${rel.romance || 0}</p>
         <div class="actions">
-          <button data-action="npc-action" data-npc-id="${npc.id}" data-npc-interaction="chat">Chat</button>
-          <button data-action="npc-action" data-npc-id="${npc.id}" data-npc-interaction="hang-out">Hang Out</button>
-          <button data-action="npc-action" data-npc-id="${npc.id}" data-npc-interaction="flirt">Flirt</button>
+          <button data-action="npc-action" data-npc-id="${npc.id}" data-npc-interaction="chat">${t(state, "npc.chat", "Chat")}</button>
+          <button data-action="npc-action" data-npc-id="${npc.id}" data-npc-interaction="hang-out">${t(state, "npc.hangOut", "Hang Out")}</button>
+          <button data-action="npc-action" data-npc-id="${npc.id}" data-npc-interaction="flirt">${t(state, "npc.flirt", "Flirt")}</button>
           <button data-action="date-npc" data-npc-id="${npc.id}" data-location-id="restaurant">Date</button>
           <button data-action="propose-npc" data-npc-id="${npc.id}">Propose</button>
         </div>
@@ -1117,7 +1117,7 @@ function renderQuests() {
         <button data-action="casino-play" data-game="slots">Slots</button>
         <button data-action="mark-all-notes">Mark Notifications Read</button>
         <button data-action="return-city">Return City</button>
-        <button data-action="upgrade-safehouse">Upgrade Safehouse</button>
+        <button data-action="upgrade-safehouse">${t(state, "inventory.upgradeSafehouse", "Upgrade Safehouse")}</button>
         <button data-action="reset-game">Reset Game</button>
         ${debugActive ? "" : '<button data-action="debug-on">Enable Debug</button>'}
       </div>
