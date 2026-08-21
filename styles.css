@@ -1244,11 +1244,6 @@ input[type="range"] {
   .city-world-stage { height: 800px; }
 }
 
-/* Keep gameplay-mode stage always full height on all screens */
-.gameplay-mode .city-world-stage {
-  height: 100dvh !important;
-}
-
 /* ── Interior rooms ──────────────────────────────────────────── */
 .city-interior-banner {
   position: absolute;

@@ -344,21 +344,171 @@ function renderSettings() {
 
 function renderDistrictMap() {
   const anchors = createDistrictAnchors(state.districts);
-  const entries = state.districts
-    .map((district) => {
-      const anchor = anchors[district.id] || { x: 0, z: 0 };
-      const x = 120 + anchor.x * 2;
-      const y = 120 + anchor.z * 2;
-      const active = district.id === state.selectedDistrictId;
-      return `<button class="district-map-point ${active ? "active" : ""}" data-action="travel" data-district-id="${district.id}" style="left:${x}px;top:${y}px;">${escapeHtml(
-        district.name
-      )}</button>`;
-    })
-    .join("");
-  return `<section class="card">
-    <h3>${t(state, "nav.map", "MAP")}</h3>
-    <div class="district-map">${entries}</div>
-  </section>`;
+  const currentDistrictId = state.selectedDistrictId;
+
+  // World bounds (with padding)
+  const PX = 12, PZ = 12;
+  const minX = -55 - PX, maxX = 56 + PX;
+  const minZ = -42 - PZ, maxZ = 52 + PZ;
+  const rangeX = maxX - minX;
+  const rangeZ = maxZ - minZ;
+
+  // World-to-percent helpers for button overlay
+  const toPercX = (x) => (((x - minX) / rangeX) * 100).toFixed(2);
+  const toPercY = (z) => (((z - minZ) / rangeZ) * 100).toFixed(2);
+
+  // District visual identity
+  const districtMeta = {
+    downtown:          { color: "#c4a96a", icon: "⬡", label: "DOWNTOWN" },
+    "old-town":        { color: "#9b7c5c", icon: "⌛", label: "OLD TOWN" },
+    harbor:            { color: "#4d8aae", icon: "⚓", label: "HARBOR" },
+    industrial:        { color: "#7a7d52", icon: "⚙", label: "INDUSTRIAL" },
+    "rich-district":   { color: "#a0507a", icon: "♦", label: "LUXURY" },
+    underground:       { color: "#8050b8", icon: "◆", label: "UNDERGROUND" },
+    residential:       { color: "#4a8c5c", icon: "⌂", label: "RESIDENTIAL" },
+    "safehouse-area":  { color: "#5a5898", icon: "◈", label: "SAFEHOUSE" },
+    "business-district": { color: "#5878a0", icon: "◉", label: "BUSINESS" },
+    outskirts:         { color: "#a04040", icon: "⚡", label: "OUTSKIRTS" }
+  };
+
+  // Build road lines between nearby districts (distance < 58)
+  const roadLines = [];
+  const dists = state.districts;
+  for (let i = 0; i < dists.length; i++) {
+    for (let j = i + 1; j < dists.length; j++) {
+      const a = anchors[dists[i].id];
+      const b = anchors[dists[j].id];
+      if (!a || !b) continue;
+      const d = Math.hypot(a.x - b.x, a.z - b.z);
+      if (d < 58) {
+        roadLines.push([a.x, a.z, b.x, b.z]);
+      }
+    }
+  }
+
+  // Generate SVG road lines
+  const roadSvg = roadLines.map(([x1, z1, x2, z2]) =>
+    `<line x1="${x1}" y1="${z1}" x2="${x2}" y2="${z2}"
+       stroke="rgba(80,96,112,0.45)" stroke-width="2.5" stroke-dasharray="5,4"
+       stroke-linecap="round"/>`
+  ).join("");
+
+  // Generate district zone blobs in SVG
+  const zoneSvg = state.districts.map((district) => {
+    const anchor = anchors[district.id];
+    if (!anchor) return "";
+    const meta = districtMeta[district.id] || { color: "#6a6a8a", icon: "•" };
+    const isCurrent = district.id === currentDistrictId;
+    const isLocked = state.player.reputation.city < (district.reputationRequirement || 0);
+    const r = isCurrent ? 18 : 14;
+    const fillOp = isLocked ? "0.08" : isCurrent ? "0.22" : "0.12";
+    const strokeOp = isLocked ? "0.25" : isCurrent ? "0.85" : "0.45";
+    const sw = isCurrent ? "1.8" : "0.9";
+    return `
+      <g opacity="${isLocked ? 0.45 : 1}">
+        <circle cx="${anchor.x}" cy="${anchor.z}" r="${r + 8}"
+          fill="${meta.color}" fill-opacity="${fillOp}"/>
+        <circle cx="${anchor.x}" cy="${anchor.z}" r="${r}"
+          fill="${meta.color}" fill-opacity="${parseFloat(fillOp) + 0.06}"
+          stroke="${meta.color}" stroke-width="${sw}" stroke-opacity="${strokeOp}"/>
+        ${isCurrent ? `
+          <circle cx="${anchor.x}" cy="${anchor.z}" r="${r + 3}"
+            fill="none" stroke="${meta.color}" stroke-width="0.7"
+            stroke-opacity="0.5" stroke-dasharray="4,3"/>
+          <circle cx="${anchor.x}" cy="${anchor.z}" r="4.5"
+            fill="${meta.color}" fill-opacity="0.95"/>
+          <circle cx="${anchor.x}" cy="${anchor.z}" r="7.5"
+            fill="none" stroke="${meta.color}" stroke-width="1.4"
+            stroke-opacity="0.55" class="map-player-ring"/>
+        ` : ""}
+      </g>`;
+  }).join("");
+
+  // SVG grid
+  const gridLines = [];
+  for (let gx = minX; gx <= maxX; gx += 20) {
+    gridLines.push(`<line x1="${gx}" y1="${minZ}" x2="${gx}" y2="${maxZ}" stroke="rgba(50,60,75,0.28)" stroke-width="0.3"/>`);
+  }
+  for (let gz = minZ; gz <= maxZ; gz += 20) {
+    gridLines.push(`<line x1="${minX}" y1="${gz}" x2="${maxX}" y2="${gz}" stroke="rgba(50,60,75,0.28)" stroke-width="0.3"/>`);
+  }
+
+  const svgBg = `
+    <svg viewBox="${minX} ${minZ} ${rangeX} ${rangeZ}"
+         xmlns="http://www.w3.org/2000/svg"
+         class="city-map-svg"
+         preserveAspectRatio="xMidYMid meet">
+      <defs>
+        <radialGradient id="ncMapBg" cx="50%" cy="50%" r="70%">
+          <stop offset="0%" stop-color="#14172a"/>
+          <stop offset="100%" stop-color="#09090f"/>
+        </radialGradient>
+        <filter id="ncGlow">
+          <feGaussianBlur in="SourceGraphic" stdDeviation="1.8" result="blur"/>
+          <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+        </filter>
+      </defs>
+      <!-- Background -->
+      <rect x="${minX}" y="${minZ}" width="${rangeX}" height="${rangeZ}" fill="url(#ncMapBg)"/>
+      <!-- Grid -->
+      ${gridLines.join("")}
+      <!-- Roads -->
+      ${roadSvg}
+      <!-- District zones -->
+      ${zoneSvg}
+      <!-- Map title watermark -->
+      <text x="${minX + 3}" y="${maxZ - 3}"
+        font-size="6" fill="rgba(196,169,106,0.45)"
+        font-weight="bold" font-family="Inter,sans-serif" letter-spacing="0.12em">NARCOS CITY</text>
+      <!-- Compass rose -->
+      <text x="${maxX - 10}" y="${minZ + 11}"
+        font-size="7" fill="rgba(168,178,196,0.55)" text-anchor="middle"
+        font-family="Inter,sans-serif">N</text>
+      <line x1="${maxX - 10}" y1="${minZ + 12}" x2="${maxX - 10}" y2="${minZ + 18}"
+        stroke="rgba(168,178,196,0.4)" stroke-width="0.8"/>
+    </svg>`;
+
+  // Clickable district buttons overlaid on top
+  const buttons = state.districts.map((district) => {
+    const anchor = anchors[district.id];
+    if (!anchor) return "";
+    const isCurrent = district.id === currentDistrictId;
+    const isLocked = state.player.reputation.city < (district.reputationRequirement || 0);
+    const meta = districtMeta[district.id] || { color: "#6a6a8a" };
+    const shortName = district.name.split(" ").slice(0, 2).join(" ");
+    return `<button
+      class="map-district-btn${isCurrent ? " active" : ""}${isLocked ? " locked" : ""}"
+      data-action="travel" data-district-id="${district.id}"
+      style="left:${toPercX(anchor.x)}%;top:${toPercY(anchor.z)}%;border-color:${isCurrent ? meta.color : ""};"
+      ${isLocked ? "disabled" : ""}
+      title="${escapeHtml(district.name)}${isLocked ? " (LOCKED)" : ""}"
+    >${escapeHtml(shortName)}</button>`;
+  }).join("");
+
+  // Legend
+  const legend = state.districts.map((district) => {
+    const meta = districtMeta[district.id] || { color: "#6a6a8a", label: district.name };
+    const isCurrent = district.id === currentDistrictId;
+    return `<span class="map-legend-item">
+      <span class="map-legend-dot" style="background:${meta.color};${isCurrent ? `box-shadow:0 0 4px ${meta.color};` : ""}"></span>
+      <span style="${isCurrent ? `color:${meta.color};font-weight:700;` : ""}">${escapeHtml(district.name)}</span>
+    </span>`;
+  }).join("");
+
+  return `
+    <div class="city-map-panel">
+      <div class="city-map-title">
+        ${t(state, "nav.map", "CITY MAP")}
+        <span style="float:right;font-size:0.65rem;color:var(--silver);font-weight:400;letter-spacing:0.04em;">
+          ${t(state, "ui.currentDistrict", "Current")}: <strong style="color:var(--gold)">${escapeHtml(state.districts.find(d => d.id === currentDistrictId)?.name || "—")}</strong>
+        </span>
+      </div>
+      <div class="city-map-svg-wrap">
+        ${svgBg}
+        ${buttons}
+      </div>
+      <div class="map-legend">${legend}</div>
+    </div>`;
 }
 
 function renderEventPanel() {
@@ -384,21 +534,22 @@ function renderCity() {
     cityWorldSession = null;
   }
   const district = getSelectedDistrict(state);
+  const isRu = getLanguage(state) === "ru";
 
   root.innerHTML = `
     <section class="city-gameplay-shell">
       ${
         state.world?.currentInteriorId
-          ? `<div class="city-interior-pill">INTERIOR · ${escapeHtml(LOCATIONS[state.world.currentInteriorId]?.name || state.world.currentInteriorId)}</div>`
+          ? `<div class="city-interior-banner">INTERIOR · ${escapeHtml(LOCATIONS[state.world.currentInteriorId]?.name || state.world.currentInteriorId)}</div>`
           : ""
       }
       <div id="city-world-3d-container" class="city-world-3d-container"></div>
     </section>
     <section class="city-quick-actions">
-      <button data-action="claim-daily">${t(state, "hud.daily", "DAILY")}</button>
-      <button data-action="safehouse-rest">${t(state, "hud.rest", "REST")}</button>
-      <button data-action="safehouse-energy">${t(state, "hud.energy", "ENERGY")}</button>
-      <button data-action="menu-map">${t(state, "nav.map", "MAP")}</button>
+      <button data-action="claim-daily">🎁 ${t(state, "hud.daily", "DAILY")}</button>
+      <button data-action="safehouse-rest">🛌 ${t(state, "hud.rest", "REST")}</button>
+      <button data-action="safehouse-energy">⚡ ${t(state, "hud.energy", "ENERGY")}</button>
+      <button data-action="menu-map">🗺 ${t(state, "nav.map", "MAP")}</button>
     </section>
   `;
 
@@ -522,36 +673,61 @@ function renderDistricts() {
   }
   const currentVehicle = state.vehicles.find((entry) => entry.id === state.player.currentVehicleId);
   const isRu = getLanguage(state) === "ru";
+
+  // District visual identity (synced with map)
+  const districtColor = {
+    downtown: "#c4a96a", "old-town": "#9b7c5c", harbor: "#4d8aae",
+    industrial: "#7a7d52", "rich-district": "#a0507a", underground: "#8050b8",
+    residential: "#4a8c5c", "safehouse-area": "#5a5898", "business-district": "#5878a0",
+    outskirts: "#a04040"
+  };
+  const dangerBars = (n) => Array.from({length: 5}, (_, i) =>
+    `<span style="color:${i < n ? "#e03048" : "rgba(255,255,255,0.12)"};font-size:0.65rem;">■</span>`
+  ).join("");
+  const wealthBars = (n) => Array.from({length: 5}, (_, i) =>
+    `<span style="color:${i < n ? "#c4a96a" : "rgba(255,255,255,0.12)"};font-size:0.65rem;">■</span>`
+  ).join("");
+
   const cards = DISTRICTS.map((district) => {
-    const selected = district.id === state.selectedDistrictId ? " active-location" : "";
+    const isCurrent = district.id === state.selectedDistrictId;
     const travelCost = Math.max(40, district.travelCost + (currentVehicle?.travelCost || 60) - 80);
     const locked = state.player.reputation.city < district.reputationRequirement;
+    const col = districtColor[district.id] || "#8888aa";
     return `
-      <article class="card${selected}">
-        <h3>${escapeHtml(district.name)}</h3>
-        <p class="muted">${escapeHtml(district.description)}</p>
-        <div class="grid-2">
-          <div class="stat">${t(state, "ui.reputationReq", "Reputation Req")}<strong>${district.reputationRequirement}</strong></div>
-          <div class="stat">${isRu ? "Стоимость поездки" : "Travel Cost"}<strong>${currency(travelCost)}</strong></div>
-          <div class="stat">${t(state, "ui.travelTime", "Travel Time")}<strong>${district.travelTime}</strong></div>
-          <div class="stat">${isRu ? "Опасность/Богатство" : "Danger/Wealth"}<strong>${district.dangerLevel}/${district.wealthLevel}</strong></div>
+      <article class="card${isCurrent ? " active-location" : ""}" style="border-left: 3px solid ${col}20;${isCurrent ? `border-color:${col}60;` : ""}">
+        <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.3rem;">
+          <span style="width:10px;height:10px;border-radius:50%;background:${col};flex-shrink:0;${isCurrent ? `box-shadow:0 0 6px ${col};` : ""}"></span>
+          <h3 style="margin:0;${isCurrent ? `color:${col};` : ""}">${escapeHtml(district.name)}</h3>
+          ${locked ? `<span style="font-size:0.6rem;color:#e03048;margin-left:auto;font-weight:700;">🔒 ${isRu ? "ЗАКРЫТ" : "LOCKED"}</span>` : ""}
+          ${isCurrent ? `<span style="font-size:0.6rem;color:${col};margin-left:auto;font-weight:700;">📍 ${isRu ? "ВЫ ЗДЕСЬ" : "YOU ARE HERE"}</span>` : ""}
+        </div>
+        <p class="muted" style="font-size:0.7rem;margin-bottom:0.45rem;">${escapeHtml(district.description)}</p>
+        <div style="display:flex;gap:0.6rem;margin-bottom:0.5rem;align-items:center;flex-wrap:wrap;">
+          <span style="font-size:0.62rem;color:var(--silver);">${isRu ? "Опасность" : "Danger"} ${dangerBars(district.dangerLevel)}</span>
+          <span style="font-size:0.62rem;color:var(--silver);">${isRu ? "Богатство" : "Wealth"} ${wealthBars(district.wealthLevel)}</span>
+          <span style="font-size:0.62rem;color:var(--silver);">${isRu ? "Репутация" : "Rep"}: <strong style="color:${locked ? "#e03048" : "var(--gold)"};">${district.reputationRequirement}</strong></span>
+          <span style="font-size:0.62rem;color:var(--silver);">${currency(travelCost)}</span>
         </div>
         <div class="actions">
-          <button data-action="travel" data-district-id="${district.id}" ${locked ? "disabled" : ""}>${isRu ? "Поехать" : "Travel"}</button>
+          <button data-action="travel" data-district-id="${district.id}"
+            ${locked ? "disabled" : ""}
+            style="${isCurrent ? `border-color:${col};color:${col};` : ""}">
+            ${isCurrent ? (isRu ? "ЗДЕСЬ" : "HERE") : (isRu ? "Поехать" : "Travel")}
+          </button>
           <button data-action="cool-heat" data-district-id="${district.id}">${isRu ? "Снизить розыск" : "Reduce Wanted"}</button>
         </div>
-      </article>
-    `;
+      </article>`;
   }).join("");
 
   root.innerHTML = `
-    <section class="card marble">
+    <section class="card marble" style="padding-bottom:0.6rem;">
       <h2>${t(state, "ui.districts", "District Network")}</h2>
-      <p class="muted">${isRu ? "Путешествия меняют репутацию, риски и возможности." : "Travel reshapes reputation, risk, and opportunities."}</p>
+      <p class="muted" style="margin-bottom:0;">${isRu ? "Путешествия меняют репутацию, риски и возможности." : "Travel reshapes reputation, risk and opportunity."}</p>
     </section>
     ${renderDistrictMap()}
-    ${cards}
-  `;
+    <div style="display:grid;gap:0.6rem;">
+      ${cards}
+    </div>`;
 }
 
 function renderProfile() {
