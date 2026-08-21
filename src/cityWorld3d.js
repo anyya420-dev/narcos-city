@@ -65,6 +65,131 @@ function createLabelTexture(text, bg = "rgba(15,15,20,0.75)", fg = "#f4e8c8") {
   return texture;
 }
 
+/**
+ * Creates a canvas texture simulating a building facade with lit windows.
+ * seed: integer for deterministic randomness
+ * baseColor: THREE hex color integer
+ * floors: approximate floor count
+ */
+function createBuildingFacadeTexture(seed, baseColorHex, floors = 8) {
+  const w = 256, h = 512;
+  const canvas = document.createElement("canvas");
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext("2d");
+
+  const r = (baseColorHex >> 16) & 0xff;
+  const g = (baseColorHex >> 8) & 0xff;
+  const b = baseColorHex & 0xff;
+  ctx.fillStyle = `rgb(${r},${g},${b})`;
+  ctx.fillRect(0, 0, w, h);
+
+  // Horizontal concrete-panel lines
+  ctx.fillStyle = "rgba(0,0,0,0.1)";
+  const panelH = Math.round(h / Math.max(4, floors));
+  for (let i = 0; i < h; i += panelH) {
+    ctx.fillRect(0, i, w, 1);
+  }
+  // Vertical seams
+  ctx.fillStyle = "rgba(0,0,0,0.06)";
+  for (let x = 0; x < w; x += Math.round(w / 6)) {
+    ctx.fillRect(x, 0, 1, h);
+  }
+
+  // Windows
+  const cols = 5;
+  const rows = Math.max(4, floors);
+  const winW = Math.round(w / cols * 0.56);
+  const winH = Math.round(h / rows * 0.48);
+  const hPad = Math.round((w / cols - winW) / 2);
+  const vPad = Math.round((h / rows - winH) / 2);
+
+  for (let row = 0; row < rows; row++) {
+    for (let col = 0; col < cols; col++) {
+      const wx = col * Math.round(w / cols) + hPad;
+      const wy = row * Math.round(h / rows) + vPad;
+      // Seeded deterministic hash for this window
+      const hash = (((seed * 1664525 + col * 1013904223 + row * 22695477) >>> 0) % 100);
+      if (hash > 22) {
+        // Lit window — warm amber/gold
+        const warm = 120 + (hash % 80);
+        const blue = 30 + (hash % 45);
+        ctx.fillStyle = `rgba(255,${warm},${blue},0.88)`;
+        // Subtle window frame
+        ctx.fillRect(wx - 1, wy - 1, winW + 2, winH + 2);
+        ctx.fillStyle = `rgba(255,${warm},${blue},0.92)`;
+      } else {
+        // Dark/reflective window
+        ctx.fillStyle = `rgba(${18 + (hash % 14)},${24 + (hash % 18)},${38 + (hash % 22)},0.92)`;
+      }
+      ctx.fillRect(wx, wy, winW, winH);
+    }
+  }
+
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.needsUpdate = true;
+  return tex;
+}
+
+/** Creates a car mesh: body, cabin, wheels, headlights/tail-lights */
+function createCarMesh(owned) {
+  const group = new THREE.Group();
+  const bodyColor = owned ? 0x1a6ba8 : 0x606068;
+  const bodyMat = new THREE.MeshStandardMaterial({ color: bodyColor, metalness: 0.65, roughness: 0.28 });
+  const darkMat = new THREE.MeshStandardMaterial({ color: 0x111114, roughness: 0.95 });
+  const glassMat = new THREE.MeshStandardMaterial({ color: 0x2a3448, metalness: 0.3, roughness: 0.1, transparent: true, opacity: 0.7 });
+
+  // Main body
+  const body = new THREE.Mesh(new THREE.BoxGeometry(1.85, 0.6, 4.0), bodyMat);
+  body.position.y = 0.54;
+  body.castShadow = true;
+  group.add(body);
+
+  // Cabin/roof
+  const cabin = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.52, 2.1), bodyMat);
+  cabin.position.set(0, 1.12, -0.15);
+  cabin.castShadow = true;
+  group.add(cabin);
+
+  // Windshield (front glass)
+  const windshield = new THREE.Mesh(new THREE.BoxGeometry(1.36, 0.46, 0.08), glassMat);
+  windshield.position.set(0, 1.1, -1.16);
+  group.add(windshield);
+
+  // Wheels
+  const wheelGeo = new THREE.CylinderGeometry(0.3, 0.3, 0.26, 14);
+  const wheelMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1c, roughness: 0.9 });
+  const rimMat = new THREE.MeshStandardMaterial({ color: 0x888898, metalness: 0.8, roughness: 0.2 });
+  [[-0.95, 0.3, -1.3], [0.95, 0.3, -1.3], [-0.95, 0.3, 1.3], [0.95, 0.3, 1.3]].forEach(([wx, wy, wz]) => {
+    const wheel = new THREE.Mesh(wheelGeo, wheelMat);
+    wheel.rotation.z = Math.PI / 2;
+    wheel.position.set(wx, wy, wz);
+    const rim = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 0.28, 8), rimMat);
+    rim.rotation.z = Math.PI / 2;
+    rim.position.set(wx, wy, wz);
+    group.add(wheel, rim);
+  });
+
+  // Headlights (emissive)
+  const headMat = new THREE.MeshStandardMaterial({ color: 0xfff8e8, emissive: 0xfff0c0, emissiveIntensity: 0.55 });
+  [[-0.55, 0.54, -2.02], [0.55, 0.54, -2.02]].forEach(([lx, ly, lz]) => {
+    const h = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.16, 0.05), headMat);
+    h.position.set(lx, ly, lz);
+    group.add(h);
+  });
+
+  // Tail lights
+  const tailMat = new THREE.MeshStandardMaterial({ color: 0xee1122, emissive: 0xcc0818, emissiveIntensity: 0.45 });
+  [[-0.55, 0.54, 2.02], [0.55, 0.54, 2.02]].forEach(([lx, ly, lz]) => {
+    const tl = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.16, 0.05), tailMat);
+    tl.position.set(lx, ly, lz);
+    group.add(tl);
+  });
+
+  group.castShadow = true;
+  return group;
+}
+
 function makeMarker(text, color = 0xf1b84c) {
   const group = new THREE.Group();
   const cone = new THREE.Mesh(new THREE.ConeGeometry(0.3, 0.8, 8), new THREE.MeshStandardMaterial({ color }));
@@ -255,81 +380,255 @@ function getDayPhase(state) {
 }
 
 function makeCityBlock(scene, model, state, qualitySettings, streetLights, colliders) {
+  // Ground
   const ground = new THREE.Mesh(
-    new THREE.PlaneGeometry(280, 280),
-    new THREE.MeshStandardMaterial({ color: 0x1f262b, roughness: 0.92, metalness: 0.03 })
+    new THREE.PlaneGeometry(320, 320),
+    new THREE.MeshStandardMaterial({ color: 0x1a2025, roughness: 0.94, metalness: 0.02 })
   );
   ground.rotation.x = -Math.PI / 2;
   ground.receiveShadow = true;
   scene.add(ground);
 
-  const roadMat = new THREE.MeshStandardMaterial({ color: 0x171b21, roughness: 0.82 });
+  // Sidewalk/pavement (slightly raised)
+  const sidewalk = new THREE.Mesh(
+    new THREE.PlaneGeometry(285, 285),
+    new THREE.MeshStandardMaterial({ color: 0x343c44, roughness: 0.96 })
+  );
+  sidewalk.rotation.x = -Math.PI / 2;
+  sidewalk.position.y = 0.01;
+  scene.add(sidewalk);
+
+  // Pavement tiles pattern (dark blocks)
+  const tileMat = new THREE.MeshStandardMaterial({ color: 0x2c3238, roughness: 0.97 });
+  for (let tx = -120; tx <= 120; tx += 20) {
+    for (let tz = -120; tz <= 120; tz += 20) {
+      const tile = new THREE.Mesh(new THREE.PlaneGeometry(19.2, 19.2), tileMat);
+      tile.rotation.x = -Math.PI / 2;
+      tile.position.set(tx, 0.015, tz);
+      scene.add(tile);
+    }
+  }
+
+  // Roads — darker asphalt
+  const roadMat = new THREE.MeshStandardMaterial({ color: 0x141820, roughness: 0.85 });
   const roads = [
-    { w: 220, h: 16, x: 0, z: 0, r: 0 },
-    { w: 220, h: 16, x: 0, z: 0, r: Math.PI / 2 },
-    { w: 150, h: 13, x: -50, z: -52, r: Math.PI / 7 },
-    { w: 150, h: 13, x: 56, z: 54, r: -Math.PI / 6 }
+    { w: 240, h: 18, x: 0, z: 0, r: 0 },
+    { w: 240, h: 18, x: 0, z: 0, r: Math.PI / 2 },
+    { w: 160, h: 14, x: -50, z: -52, r: Math.PI / 7 },
+    { w: 160, h: 14, x: 56, z: 54, r: -Math.PI / 6 },
+    { w: 110, h: 12, x: -42, z: 28, r: Math.PI / 2.4 },
+    { w: 110, h: 12, x: 38, z: -16, r: -Math.PI / 3.6 }
   ];
   roads.forEach((entry) => {
     const road = new THREE.Mesh(new THREE.PlaneGeometry(entry.w, entry.h), roadMat);
     road.rotation.x = -Math.PI / 2;
     road.rotation.z = entry.r;
-    road.position.set(entry.x, 0.02, entry.z);
+    road.position.set(entry.x, 0.03, entry.z);
     scene.add(road);
   });
 
-  const sidewalk = new THREE.Mesh(
-    new THREE.PlaneGeometry(255, 255),
-    new THREE.MeshStandardMaterial({ color: 0x3d444b, roughness: 0.95 })
-  );
-  sidewalk.rotation.x = -Math.PI / 2;
-  sidewalk.position.y = -0.01;
-  scene.add(sidewalk);
+  // Road lane markings (white dashed center lines)
+  const laneMat = new THREE.MeshStandardMaterial({ color: 0xdde0e4, roughness: 0.95, transparent: true, opacity: 0.75 });
+  // Horizontal road
+  for (let x = -110; x <= 110; x += 14) {
+    const dash = new THREE.Mesh(new THREE.PlaneGeometry(8, 0.32), laneMat);
+    dash.rotation.x = -Math.PI / 2;
+    dash.position.set(x, 0.042, 0);
+    scene.add(dash);
+  }
+  // Vertical road
+  for (let z = -110; z <= 110; z += 14) {
+    const dash = new THREE.Mesh(new THREE.PlaneGeometry(0.32, 8), laneMat);
+    dash.rotation.x = -Math.PI / 2;
+    dash.position.set(0, 0.042, z);
+    scene.add(dash);
+  }
 
-  const treeMat = new THREE.MeshStandardMaterial({ color: 0x2f5345, roughness: 0.86 });
-  const trunkMat = new THREE.MeshStandardMaterial({ color: 0x4b3428, roughness: 0.9 });
-  for (let i = 0; i < 26; i += 1) {
-    const angle = (i / 26) * Math.PI * 2;
-    const radius = 74 + (i % 4) * 4;
-    const x = Math.cos(angle) * radius;
-    const z = Math.sin(angle) * radius;
-    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.24, 1.5, 6), trunkMat);
-    trunk.position.set(x, 0.74, z);
-    const crown = new THREE.Mesh(new THREE.ConeGeometry(1, 2.3, 7), treeMat);
-    crown.position.set(x, 2.2, z);
+  // Crosswalk at main intersection
+  const crossMat = new THREE.MeshStandardMaterial({ color: 0xdde0e4, roughness: 0.95, transparent: true, opacity: 0.62 });
+  for (let cx = -4; cx <= 4; cx += 2) {
+    const stripe = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 9), crossMat);
+    stripe.rotation.x = -Math.PI / 2;
+    stripe.position.set(cx, 0.04, -9);
+    scene.add(stripe);
+  }
+  for (let cx = -4; cx <= 4; cx += 2) {
+    const stripe = new THREE.Mesh(new THREE.PlaneGeometry(9, 1.4), crossMat);
+    stripe.rotation.x = -Math.PI / 2;
+    stripe.position.set(-9, 0.04, cx);
+    scene.add(stripe);
+  }
+
+  // Curbs/curb edging
+  const curbMat = new THREE.MeshStandardMaterial({ color: 0x3e4850, roughness: 0.9 });
+  // Along horizontal road
+  [-9.5, 9.5].forEach(z => {
+    const curb = new THREE.Mesh(new THREE.BoxGeometry(200, 0.12, 0.45), curbMat);
+    curb.position.set(0, 0.06, z);
+    scene.add(curb);
+  });
+  // Along vertical road
+  [-9.5, 9.5].forEach(x => {
+    const curb = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.12, 200), curbMat);
+    curb.position.set(x, 0.06, 0);
+    scene.add(curb);
+  });
+
+  // Trees (more spread out, around district areas)
+  const treeMat  = new THREE.MeshStandardMaterial({ color: 0x273e34, roughness: 0.88 });
+  const treeMat2 = new THREE.MeshStandardMaterial({ color: 0x1e3028, roughness: 0.88 });
+  const trunkMat = new THREE.MeshStandardMaterial({ color: 0x3c2a1e, roughness: 0.92 });
+  const treePositions = [
+    [-12, -12], [12, -12], [-12, 12], [12, 12],
+    [-24, -22], [24, -22], [-24, 22], [24, 22],
+    [-38, -14], [38, -14], [-38, 14], [38, 14],
+    [-15, -35], [15, -35], [-15, 35], [15, 35],
+    [-48, -35], [48, -35], [-48, 35], [48, 35],
+    [-68, -8], [68, -8], [-68, 8], [68, 8],
+    [-5, -56], [5, -56], [-5, 56], [5, 56],
+    [-30, -65], [30, -65], [-30, 65], [30, 65]
+  ];
+  treePositions.forEach(([tx, tz], ti) => {
+    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.22, 1.8, 7), trunkMat);
+    trunk.position.set(tx, 0.9, tz);
+    const crownH = 2.0 + (ti % 3) * 0.6;
+    const crown = new THREE.Mesh(new THREE.ConeGeometry(0.9 + (ti % 4) * 0.15, crownH, 7), ti % 2 === 0 ? treeMat : treeMat2);
+    crown.position.set(tx, 2.0 + crownH * 0.5 - 0.2, tz);
     scene.add(trunk, crown);
+  });
+
+  // Small street furniture: bollards, benches, dumpsters
+  const bollardMat = new THREE.MeshStandardMaterial({ color: 0x3a3a4a, metalness: 0.5, roughness: 0.55 });
+  const bollardPositions = [[-10, -11], [10, -11], [-10, 11], [10, 11], [-18, -11], [18, -11], [-18, 11], [18, 11]];
+  bollardPositions.forEach(([bx, bz]) => {
+    const b = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.18, 0.9, 8), bollardMat);
+    b.position.set(bx, 0.45, bz);
+    scene.add(b);
+  });
+
+  // Benches along sidewalk
+  const benchMat = new THREE.MeshStandardMaterial({ color: 0x2e2824, roughness: 0.9 });
+  const benchMetalMat = new THREE.MeshStandardMaterial({ color: 0x484450, metalness: 0.5, roughness: 0.6 });
+  [[-16, -14], [16, -14], [-16, 14], [16, 14]].forEach(([bx, bz]) => {
+    const seat = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.12, 0.6), benchMat);
+    seat.position.set(bx, 0.46, bz);
+    const leg1 = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.46, 0.1), benchMetalMat);
+    leg1.position.set(bx - 0.7, 0.23, bz);
+    const leg2 = leg1.clone(); leg2.position.set(bx + 0.7, 0.23, bz);
+    scene.add(seat, leg1, leg2);
+  });
+
+  // Dumpsters
+  const dumpMat = new THREE.MeshStandardMaterial({ color: 0x1e3c1e, roughness: 0.85 });
+  [[-22, 16], [22, -16], [-44, 8], [44, -8]].forEach(([dx, dz]) => {
+    const dump = new THREE.Mesh(new THREE.BoxGeometry(1.8, 1.3, 1.0), dumpMat);
+    dump.position.set(dx, 0.65, dz);
+    scene.add(dump);
+  });
+
+  // Parking lot stripes
+  const parkMat = new THREE.MeshStandardMaterial({ color: 0xd0d4d8, roughness: 0.96, transparent: true, opacity: 0.5 });
+  for (let i = 0; i < 6; i++) {
+    const stripe = new THREE.Mesh(new THREE.PlaneGeometry(0.22, 4.5), parkMat);
+    stripe.rotation.x = -Math.PI / 2;
+    stripe.position.set(22 + i * 2.8, 0.038, 20);
+    scene.add(stripe);
   }
 
   const facadeByType = {
-    safehouse: 0x534145,
-    nightlife: 0x4f3559,
-    finance: 0x5b5f6d,
-    garage: 0x434a55,
-    business: 0x66606b
+    safehouse:  0x3c2e38,
+    nightlife:  0x3a2952,
+    finance:    0x3a4054,
+    garage:     0x2e3740,
+    business:   0x4a4254
   };
 
+  const buildingHeightScale = [1.0, 1.2, 0.8, 1.5, 1.8, 1.1, 0.9, 2.0, 1.4, 1.3, 1.6, 0.85, 1.7, 1.0, 1.25, 1.45];
+
   model.buildings.forEach((building, index) => {
-    const mesh = new THREE.Mesh(
-      new THREE.BoxGeometry(building.width, building.height, building.depth),
-      new THREE.MeshStandardMaterial({
-        color: facadeByType[building.locationType] || (index % 2 ? 0x535d75 : 0x6f6874),
-        roughness: 0.74,
-        metalness: 0.12
-      })
-    );
-    mesh.position.set(building.x, building.height * 0.5, building.z);
+    const baseColor = facadeByType[building.locationType] || (index % 3 === 0 ? 0x3e3a52 : index % 3 === 1 ? 0x4a3848 : 0x2e3844);
+    const heightMul = buildingHeightScale[index % buildingHeightScale.length];
+    const bh = building.height * heightMul;
+
+    // Facade texture with window lights
+    const facadeTex = createBuildingFacadeTexture(index * 137 + 41, baseColor, Math.round(bh * 1.2));
+    const facadeMat = new THREE.MeshStandardMaterial({
+      color: baseColor,
+      map: facadeTex,
+      roughness: 0.78,
+      metalness: 0.1
+    });
+
+    // Main building body
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(building.width, bh, building.depth), facadeMat);
+    mesh.position.set(building.x, bh * 0.5, building.z);
     mesh.castShadow = qualitySettings.shadow;
     mesh.receiveShadow = true;
     scene.add(mesh);
     colliders.push(mesh);
 
+    // Rooftop equipment (AC, water tower, antenna)
+    const roofY = bh;
+    if (index % 4 === 0) {
+      // Antenna
+      const ant = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 2.5, 4),
+        new THREE.MeshStandardMaterial({ color: 0x888898, metalness: 0.6, roughness: 0.4 }));
+      ant.position.set(building.x + building.width * 0.3, roofY + 1.25, building.z - building.depth * 0.3);
+      scene.add(ant);
+    }
+    if (index % 5 === 0 && bh > 8) {
+      // Water tower
+      const tank = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 1.8, 8),
+        new THREE.MeshStandardMaterial({ color: 0x3a3028, roughness: 0.9 }));
+      tank.position.set(building.x - building.width * 0.25, roofY + 0.9, building.z + building.depth * 0.2);
+      const legs = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 1.4, 4),
+        new THREE.MeshStandardMaterial({ color: 0x4a3828, roughness: 0.8 }));
+      legs.position.set(building.x - building.width * 0.25, roofY + 0.0, building.z + building.depth * 0.2);
+      scene.add(tank, legs);
+    }
+    if (index % 3 === 0) {
+      // AC unit
+      const ac = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.6, 1.0),
+        new THREE.MeshStandardMaterial({ color: 0x606878, metalness: 0.4, roughness: 0.6 }));
+      ac.position.set(building.x + building.width * 0.2, roofY + 0.3, building.z - building.depth * 0.25);
+      scene.add(ac);
+    }
+
+    // Entrance portal for enterable buildings
     if (building.enterable) {
-      const portal = new THREE.Mesh(
-        new THREE.BoxGeometry(1.4, 2.2, 0.25),
-        new THREE.MeshStandardMaterial({ color: 0xb59a5f, emissive: 0x5b451a, emissiveIntensity: 0.45 })
-      );
-      portal.position.set(building.door.x, 1.1, building.door.z - 0.42);
+      const portalMat = new THREE.MeshStandardMaterial({
+        color: 0xb59a5f, emissive: 0x6b4a1a, emissiveIntensity: 0.55,
+        metalness: 0.3, roughness: 0.4
+      });
+      const portal = new THREE.Mesh(new THREE.BoxGeometry(1.6, 2.4, 0.22), portalMat);
+      portal.position.set(building.door.x, 1.2, building.door.z - 0.4);
       scene.add(portal);
+
+      // Door frame
+      const frameMat = new THREE.MeshStandardMaterial({ color: 0xc4a96a, metalness: 0.5, roughness: 0.3 });
+      const frameL = new THREE.Mesh(new THREE.BoxGeometry(0.12, 2.6, 0.18), frameMat);
+      frameL.position.set(building.door.x - 0.85, 1.3, building.door.z - 0.38);
+      const frameR = frameL.clone();
+      frameR.position.set(building.door.x + 0.85, 1.3, building.door.z - 0.38);
+      const frameT = new THREE.Mesh(new THREE.BoxGeometry(1.9, 0.12, 0.18), frameMat);
+      frameT.position.set(building.door.x, 2.5, building.door.z - 0.38);
+      scene.add(frameL, frameR, frameT);
+
+      // Awning
+      const awningMat = new THREE.MeshStandardMaterial({ color: 0x2a1a2e, roughness: 0.9 });
+      const awning = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.08, 1.2), awningMat);
+      awning.position.set(building.door.x, 2.75, building.door.z + 0.2);
+      scene.add(awning);
+    }
+
+    // Sign (neon-lit for nightlife)
+    if (building.locationType === "nightlife") {
+      const signMat = new THREE.MeshStandardMaterial({
+        color: 0x9b4dca, emissive: 0x7a28a8, emissiveIntensity: 0.8, roughness: 0.4
+      });
+      const sign = new THREE.Mesh(new THREE.BoxGeometry(building.width * 0.6, 0.5, 0.12), signMat);
+      sign.position.set(building.x, bh * 0.65, building.z - building.depth * 0.5 - 0.1);
+      scene.add(sign);
     }
 
     const marker = makeMarker(building.name, building.enterable ? 0x78e8b6 : 0xf4c35c);
@@ -343,39 +642,45 @@ function makeCityBlock(scene, model, state, qualitySettings, streetLights, colli
     scene.add(marker);
   });
 
-  const lampPositions = [
-    [-80, -22],
-    [-56, -18],
-    [-24, -20],
-    [18, -17],
-    [54, -17],
-    [84, -20],
-    [-84, 19],
-    [-48, 20],
-    [-16, 19],
-    [20, 20],
-    [54, 20],
-    [86, 21],
-    [-22, -78],
-    [23, -78],
-    [-18, 77],
-    [19, 77]
-  ];
-  lampPositions.forEach(([x, z]) => {
-    const post = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.09, 0.11, 4.5, 8),
-      new THREE.MeshStandardMaterial({ color: 0x555d66, metalness: 0.35, roughness: 0.5 })
-    );
-    post.position.set(x, 2.2, z);
-    const bulb = new THREE.Mesh(
-      new THREE.SphereGeometry(0.18, 10, 8),
-      new THREE.MeshStandardMaterial({ color: 0xfde4ad, emissive: 0xffcc7a, emissiveIntensity: 0.2 })
-    );
-    bulb.position.set(x, 4.35, z);
-    scene.add(post, bulb);
+  // Street lights — more of them, along roads
+  const lampPostMat = new THREE.MeshStandardMaterial({ color: 0x4a5260, metalness: 0.5, roughness: 0.45 });
+  const lampArmMat  = new THREE.MeshStandardMaterial({ color: 0x404858, metalness: 0.55, roughness: 0.4 });
+  const lampBulbMat = new THREE.MeshStandardMaterial({ color: 0xfde4ad, emissive: 0xffcc7a, emissiveIntensity: 0.28 });
 
-    const light = new THREE.PointLight(0xffd39a, 0, 16, 2);
-    light.position.set(x, 4.35, z);
+  const lampPositions = [
+    // Along horizontal road (z ≈ ±10)
+    [-90, -11], [-72, -11], [-54, -11], [-36, -11], [-18, -11],
+    [18, -11],  [36, -11],  [54, -11],  [72, -11],  [90, -11],
+    [-90, 11],  [-72, 11],  [-54, 11],  [-36, 11],  [-18, 11],
+    [18, 11],   [36, 11],   [54, 11],   [72, 11],   [90, 11],
+    // Along vertical road (x ≈ ±10)
+    [-11, -90], [-11, -72], [-11, -54], [-11, -36], [-11, -18],
+    [-11, 18],  [-11, 36],  [-11, 54],  [-11, 72],  [-11, 90],
+    [11, -90],  [11, -72],  [11, -54],  [11, -36],  [11, -18],
+    [11, 18],   [11, 36],   [11, 54],   [11, 72],   [11, 90],
+    // Diagonal road lamps
+    [-52, -48], [-38, -38], [-28, -28],
+    [42, 28],   [54, 38],   [66, 48]
+  ];
+
+  lampPositions.forEach(([x, z]) => {
+    // Post
+    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.1, 5.0, 8), lampPostMat);
+    post.position.set(x, 2.5, z);
+    // Arm
+    const arm = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.1, 0.1), lampArmMat);
+    arm.position.set(x + (z > 0 ? 0.6 : -0.6), 4.9, z);
+    // Bulb
+    const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.2, 10, 8), lampBulbMat.clone());
+    bulb.position.set(x + (z > 0 ? 1.1 : -1.1), 4.7, z);
+    // Housing shade
+    const shade = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.22, 0.28, 8, 1, true),
+      new THREE.MeshStandardMaterial({ color: 0x3a4050, side: THREE.DoubleSide, roughness: 0.8 }));
+    shade.position.set(x + (z > 0 ? 1.1 : -1.1), 4.84, z);
+    scene.add(post, arm, bulb, shade);
+
+    const light = new THREE.PointLight(0xffe0a0, 0, 18, 2);
+    light.position.set(x + (z > 0 ? 1.1 : -1.1), 4.7, z);
     scene.add(light);
     streetLights.push({ bulb, light });
   });
@@ -492,27 +797,80 @@ export function mountCityWorld3d({ container, state, onInteract, onMenuAction, o
     fog: t("weather.fog", "FOG")
   };
 
+  const initHp  = Math.round(state.player.health);
+  const initEn  = Math.round(state.player.energy);
+  const initXp  = state.player.xp || 0;
+  const initNxp = state.player.nextLevelXp || 100;
+  const initLvl = state.player.level || 1;
+  const initCash = `$${Math.round(state.player.money || 0).toLocaleString()}`;
+  const initWanted = state.player.wantedLevel || 0;
+  const initRep = state.player.reputation?.city || 0;
+  const initName = state.player.name || "—";
+  const initDistrict = (state.districts?.find(d => d.id === state.selectedDistrictId)?.name || "CITY").toUpperCase();
+
+  const wantedStars = Array.from({ length: 5 }, (_, i) =>
+    `<span class="hud-wanted-star${i < initWanted ? " lit" : ""}">★</span>`
+  ).join("");
+
   container.innerHTML = `
     <div class="city-world-stage">
       <div class="city-world-canvas"></div>
       <div class="city-world-overlay">
-        <div class="hud-corner hud-top-left">
-          <p>HP <strong>${Math.round(state.player.health)}</strong></p>
-          <p>EN <strong>${Math.round(state.player.energy)}</strong></p>
+
+        <!-- Premium HUD left: health, energy, xp, level -->
+        <div class="hud-panel hud-left">
+          <div class="hud-name" id="hud-name">${initName}</div>
+          <div class="hud-row">
+            <span class="hud-ico">♥</span>
+            <div class="hud-bar-track"><div class="hud-bar-fill hud-hp" id="hud-hp-fill" style="width:${Math.min(100,initHp)}%"></div></div>
+            <span class="hud-val" id="hud-hp-val">${initHp}</span>
+          </div>
+          <div class="hud-row">
+            <span class="hud-ico hud-ico-en">⚡</span>
+            <div class="hud-bar-track"><div class="hud-bar-fill hud-en" id="hud-en-fill" style="width:${Math.min(100,initEn)}%"></div></div>
+            <span class="hud-val" id="hud-en-val">${initEn}</span>
+          </div>
+          <div class="hud-row">
+            <span class="hud-ico hud-ico-xp">★</span>
+            <div class="hud-bar-track"><div class="hud-bar-fill hud-xp" id="hud-xp-fill" style="width:${Math.min(100,initXp/Math.max(1,initNxp)*100)}%"></div></div>
+            <span class="hud-lvl" id="hud-lvl">LV${initLvl}</span>
+          </div>
         </div>
-        <div class="hud-corner hud-top-right">
-          <p>CASH <strong>$${Math.round(state.player.money).toLocaleString()}</strong></p>
-          <p>LVL <strong>${state.player.level}</strong> · REP <strong>${state.player.reputation.city}</strong></p>
+
+        <!-- Premium HUD right: cash, wanted, rep -->
+        <div class="hud-panel hud-right">
+          <div class="hud-cash" id="hud-cash">${initCash}</div>
+          <div class="hud-wanted" id="hud-wanted">${wantedStars}</div>
+          <div class="hud-rep" id="hud-rep">REP ${initRep}</div>
         </div>
+
+        <!-- Top controls + district/time/weather badges -->
         <div class="hud-top-controls">
           <button class="world-button small" id="pause-button" type="button" aria-label="Pause menu">☰</button>
+          <div class="hud-badge-row">
+            <span class="hud-badge hud-badge-district" id="hud-district">${initDistrict}</span>
+            <span class="hud-badge" id="hud-time">--:--</span>
+            <span class="hud-badge" id="hud-weather">—</span>
+          </div>
           <button class="world-button small" id="zoom-in-button" type="button" aria-label="Zoom in">＋</button>
           <button class="world-button small" id="zoom-out-button" type="button" aria-label="Zoom out">－</button>
           <button class="world-button small" id="fullscreen-button" type="button" aria-label="Toggle fullscreen">⛶</button>
         </div>
-        <div class="world-time" id="world-time"></div>
-        <div class="world-weather" id="world-weather"></div>
-        <div class="interaction-prompt" id="interaction-prompt">${t("prompt.explore", "Explore the city...")}</div>
+
+        <!-- Legacy time/weather nodes (kept for backwards-compat, hidden) -->
+        <div id="world-time" class="hud-hidden" aria-hidden="true"></div>
+        <div id="world-weather" class="hud-hidden" aria-hidden="true"></div>
+
+        <!-- Interaction prompt (panel style) -->
+        <div class="interact-panel" id="interaction-prompt">
+          <span class="interact-icon" id="interact-icon">🧭</span>
+          <span class="interact-body">
+            <span class="interact-target" id="interact-target">${t("prompt.explore", "Explore the city...")}</span>
+            <span class="interact-hint" id="interact-hint"></span>
+          </span>
+        </div>
+
+        <!-- Pause menu -->
         <div class="pause-menu" id="pause-menu" hidden>
           <h3>${t("pause.title", "PAUSED")}</h3>
           <div class="pause-grid">
@@ -529,6 +887,8 @@ export function mountCityWorld3d({ container, state, onInteract, onMenuAction, o
             <button data-menu="main-menu" type="button">${t("pause.exit", "Exit Menu")}</button>
           </div>
         </div>
+
+        <!-- Mobile controls -->
         <div class="city-world-controls" aria-hidden="true">
           <div class="left-controls">
             <div class="stick-base" id="move-stick"><div class="stick-knob" id="move-knob"></div></div>
@@ -559,6 +919,24 @@ export function mountCityWorld3d({ container, state, onInteract, onMenuAction, o
   const pauseMenu = container.querySelector("#pause-menu");
   const zoomInButton = container.querySelector("#zoom-in-button");
   const zoomOutButton = container.querySelector("#zoom-out-button");
+
+  // Premium HUD element refs
+  const hudHpFill    = container.querySelector("#hud-hp-fill");
+  const hudEnFill    = container.querySelector("#hud-en-fill");
+  const hudXpFill    = container.querySelector("#hud-xp-fill");
+  const hudHpVal     = container.querySelector("#hud-hp-val");
+  const hudEnVal     = container.querySelector("#hud-en-val");
+  const hudLvlEl     = container.querySelector("#hud-lvl");
+  const hudCashEl    = container.querySelector("#hud-cash");
+  const hudWantedEl  = container.querySelector("#hud-wanted");
+  const hudRepEl     = container.querySelector("#hud-rep");
+  const hudDistrictEl= container.querySelector("#hud-district");
+  const hudTimeEl    = container.querySelector("#hud-time");
+  const hudWeatherEl = container.querySelector("#hud-weather");
+  const hudNameEl    = container.querySelector("#hud-name");
+  const interactIcon = container.querySelector("#interact-icon");
+  const interactTarget = container.querySelector("#interact-target");
+  const interactHint   = container.querySelector("#interact-hint");
 
   let renderer;
   try {
@@ -610,15 +988,44 @@ export function mountCityWorld3d({ container, state, onInteract, onMenuAction, o
     makeCityBlock(scene, model, state, qualitySettings, streetLights, colliders);
 
     const npcLimit = Math.min(qualitySettings.npcLimit, model.npcs.length);
+    // NPC color palettes by role type
+    const npcBodyColors = [0x2a1a30, 0x1a2a38, 0x2a2018, 0x182a1a, 0x2a1a1a];
+    const npcSkinColors = [0xb07858, 0xc8a07a, 0x8a6040, 0xd0aa88, 0xa08060];
     model.npcs.slice(0, npcLimit).forEach((npc, index) => {
       const group = new THREE.Group();
-      const body = new THREE.Mesh(
-        new THREE.CapsuleGeometry(0.32, 0.85, 4, 8),
-        new THREE.MeshStandardMaterial({ color: index % 2 ? 0xd57d64 : 0x74a6d6 })
-      );
-      body.castShadow = qualitySettings.shadow;
-      body.position.y = 0.88;
-      group.add(body);
+      const skinCol = npcSkinColors[index % npcSkinColors.length];
+      const bodyCol = npcBodyColors[index % npcBodyColors.length];
+      const bodyMat = new THREE.MeshStandardMaterial({ color: bodyCol, roughness: 0.7 });
+      const skinMat = new THREE.MeshStandardMaterial({ color: skinCol, roughness: 0.75 });
+
+      // Torso
+      const torso = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.72, 0.3), bodyMat);
+      torso.position.y = 1.2;
+      torso.castShadow = qualitySettings.shadow;
+      group.add(torso);
+      // Head
+      const head = new THREE.Mesh(new THREE.SphereGeometry(0.22, 10, 9), skinMat);
+      head.position.y = 1.85;
+      head.castShadow = qualitySettings.shadow;
+      group.add(head);
+      // Legs
+      const legGeo = new THREE.CapsuleGeometry(0.1, 0.48, 4, 8);
+      const leftLeg  = new THREE.Mesh(legGeo, bodyMat);
+      const rightLeg = new THREE.Mesh(legGeo, bodyMat);
+      leftLeg.position.set(-0.15, 0.64, 0);
+      rightLeg.position.set( 0.15, 0.64, 0);
+      leftLeg.castShadow = rightLeg.castShadow = qualitySettings.shadow;
+      group.add(leftLeg, rightLeg);
+      // Arms
+      const armGeo = new THREE.CapsuleGeometry(0.08, 0.38, 4, 8);
+      const leftArm  = new THREE.Mesh(armGeo, bodyMat);
+      const rightArm = new THREE.Mesh(armGeo, bodyMat);
+      leftArm.position.set(-0.35, 1.15, 0);
+      rightArm.position.set( 0.35, 1.15, 0);
+      group.add(leftArm, rightArm);
+      // Store for animation
+      group.userData.arms = { leftArm, rightArm, leftLeg, rightLeg, phase: Math.random() * Math.PI * 2 };
+
       group.position.set(npc.x, 0, npc.z);
 
       const badge = makeMarker(npc.name.split(" ")[0], 0x89d9a1);
@@ -632,13 +1039,10 @@ export function mountCityWorld3d({ container, state, onInteract, onMenuAction, o
     });
 
     model.vehicles.forEach((vehicle) => {
-      const mesh = new THREE.Mesh(
-        new THREE.BoxGeometry(1.8, 0.8, 3.2),
-        new THREE.MeshStandardMaterial({ color: vehicle.owned ? 0x49a7e3 : 0x7a7f85, metalness: 0.35, roughness: 0.45 })
-      );
-      mesh.position.set(vehicle.x, 0.45, vehicle.z);
-      mesh.castShadow = qualitySettings.shadow;
-      scene.add(mesh);
+      const carGroup = createCarMesh(vehicle.owned);
+      carGroup.position.set(vehicle.x, 0, vehicle.z);
+      carGroup.rotation.y = (vehicle.owned ? 0 : Math.PI * 0.18);
+      scene.add(carGroup);
     });
   }
 
@@ -865,14 +1269,25 @@ export function mountCityWorld3d({ container, state, onInteract, onMenuAction, o
     if (!nearest || !onInteract) {
       // Flash "no nearby target" message in the interaction prompt
       if (promptNode) {
-        const original = promptNode.textContent;
-        promptNode.textContent = t("prompt.noTarget", "Рядом нет объекта для взаимодействия.");
-        promptNode.classList.add("prompt-flash");
-        clearTimeout(promptNode._flashTimeout);
-        promptNode._flashTimeout = setTimeout(() => {
-          promptNode.textContent = original;
-          promptNode.classList.remove("prompt-flash");
-        }, 1800);
+        if (interactTarget) {
+          const origTarget = interactTarget.textContent;
+          interactTarget.textContent = t("prompt.noTarget", "No target nearby");
+          promptNode.classList.add("prompt-flash");
+          clearTimeout(promptNode._flashTimeout);
+          promptNode._flashTimeout = setTimeout(() => {
+            interactTarget.textContent = origTarget;
+            promptNode.classList.remove("prompt-flash");
+          }, 1800);
+        } else {
+          const original = promptNode.textContent;
+          promptNode.textContent = t("prompt.noTarget", "No target nearby");
+          promptNode.classList.add("prompt-flash");
+          clearTimeout(promptNode._flashTimeout);
+          promptNode._flashTimeout = setTimeout(() => {
+            promptNode.textContent = original;
+            promptNode.classList.remove("prompt-flash");
+          }, 1800);
+        }
       }
       return;
     }
@@ -884,16 +1299,28 @@ export function mountCityWorld3d({ container, state, onInteract, onMenuAction, o
       const dx = npc.targetX - npc.mesh.position.x;
       const dz = npc.targetZ - npc.mesh.position.z;
       const dist = Math.hypot(dx, dz);
-      if (dist < 0.2) {
+      const moving = dist >= 0.2;
+      if (!moving) {
         npc.wanderPhase += dt * 0.6;
         npc.targetX = npc.homeX + Math.cos(npc.wanderPhase) * 2.2;
         npc.targetZ = npc.homeZ + Math.sin(npc.wanderPhase * 1.1) * 2.2;
-        return;
+      } else {
+        const speed = 1.05;
+        npc.mesh.position.x += (dx / Math.max(0.001, dist)) * speed * dt;
+        npc.mesh.position.z += (dz / Math.max(0.001, dist)) * speed * dt;
+        npc.mesh.rotation.y = Math.atan2(dx, dz);
       }
-      const speed = 1.05;
-      npc.mesh.position.x += (dx / Math.max(0.001, dist)) * speed * dt;
-      npc.mesh.position.z += (dz / Math.max(0.001, dist)) * speed * dt;
-      npc.mesh.rotation.y = Math.atan2(dx, dz);
+      // Animate limbs for humanoid NPCs
+      const arms = npc.mesh.userData.arms;
+      if (arms) {
+        arms.phase += dt * (moving ? 4.5 : 1.2);
+        const swing = moving ? 0.42 : 0.06;
+        const wave = Math.sin(arms.phase) * swing;
+        arms.leftArm.rotation.x  =  wave;
+        arms.rightArm.rotation.x = -wave;
+        arms.leftLeg.rotation.x  = -wave * 1.1;
+        arms.rightLeg.rotation.x =  wave * 1.1;
+      }
     });
   }
 
@@ -1015,16 +1442,64 @@ export function mountCityWorld3d({ container, state, onInteract, onMenuAction, o
       nearest = findNearestInteraction({ x: player.position.x, z: player.position.z }, dynamicInteractables, INTERACTION_RANGE);
       const hour = String(state.time?.hour ?? 0).padStart(2, "0");
       const minute = String(state.time?.minute ?? 0).padStart(2, "0");
-      worldTimeNode.textContent = `${t("hud.time", "TIME")} ${hour}:${minute} · ${t("hud.day", "DAY")} ${state.time?.day || 1}`;
-      worldWeatherNode.textContent = `${t("hud.weather", "WEATHER")} ${weatherLabelById[state.weather?.current] || weatherLabelById.clear} · ${String(state.time?.season || "spring").toUpperCase()}`;
+      // Legacy hidden nodes
+      worldTimeNode.textContent = `${hour}:${minute}`;
+      worldWeatherNode.textContent = weatherLabelById[state.weather?.current] || weatherLabelById.clear;
+
+      // --- Premium HUD update ---
+      const hp  = Math.round(state.player.health);
+      const en  = Math.round(state.player.energy);
+      const xp  = state.player.xp || 0;
+      const nxp = state.player.nextLevelXp || 100;
+      const lvl = state.player.level || 1;
+      const wl  = state.player.wantedLevel || 0;
+      const rep = state.player.reputation?.city || 0;
+      const distName = (state.districts?.find(d => d.id === state.selectedDistrictId)?.name || "CITY").toUpperCase();
+      const weatherLabel = weatherLabelById[state.weather?.current] || weatherLabelById.clear;
+      const weatherIcon = { clear: "☀", cloudy: "⛅", rain: "🌧", fog: "🌫" }[state.weather?.current] || "☀";
+      const timeLabel = `${hour}:${minute}`;
+
+      if (hudHpFill)     hudHpFill.style.width = `${Math.min(100, hp)}%`;
+      if (hudEnFill)     hudEnFill.style.width = `${Math.min(100, en)}%`;
+      if (hudXpFill)     hudXpFill.style.width = `${Math.min(100, xp / Math.max(1, nxp) * 100)}%`;
+      if (hudHpVal)      hudHpVal.textContent = hp;
+      if (hudEnVal)      hudEnVal.textContent = en;
+      if (hudLvlEl)      hudLvlEl.textContent = `LV${lvl}`;
+      if (hudCashEl)     hudCashEl.textContent = `$${Math.round(state.player.money || 0).toLocaleString()}`;
+      if (hudRepEl)      hudRepEl.textContent = `REP ${rep}`;
+      if (hudDistrictEl) hudDistrictEl.textContent = distName;
+      if (hudTimeEl)     hudTimeEl.textContent = timeLabel;
+      if (hudWeatherEl)  hudWeatherEl.textContent = `${weatherIcon} ${String(state.time?.season || "SPR").slice(0,3).toUpperCase()}`;
+      if (hudNameEl)     hudNameEl.textContent = state.player.name || "—";
+      if (hudWantedEl) {
+        hudWantedEl.innerHTML = Array.from({ length: 5 }, (_, i) =>
+          `<span class="hud-wanted-star${i < wl ? " lit" : ""}">★</span>`
+        ).join("");
+      }
+
+      // --- Interaction prompt update ---
+      const INTERACT_ICONS = {
+        door: "🚪", npc: "💬", vehicle: "🚗", "district-marker": "🗺", "interior-exit": "↩"
+      };
+      const INTERACT_TYPE_LABELS = {
+        door: t("prompt.enter", "Enter"), npc: t("prompt.talk", "Talk to"), vehicle: t("prompt.vehicle", "Vehicle"),
+        "district-marker": t("prompt.travel", "Travel to"), "interior-exit": t("prompt.exit", "Exit")
+      };
       if (nearest) {
-        const buttonPrompt = interiorType ? t("prompt.tapInteract", "Tap INTERACT") : t("prompt.keyboardInteract", "[E] or Tap INTERACT");
-        promptNode.textContent = `${nearest.prompt} · ${buttonPrompt}`;
+        const icon = INTERACT_ICONS[nearest.interactionType] || "🎯";
+        const typeLabel = INTERACT_TYPE_LABELS[nearest.interactionType] || "";
+        const keyHint = interiorType
+          ? `<span class="interact-key">INTERACT</span>`
+          : `<span class="interact-key">E</span>`;
+        if (interactIcon)   interactIcon.textContent = icon;
+        if (interactTarget) interactTarget.textContent = nearest.name || nearest.prompt || "";
+        if (interactHint)   interactHint.innerHTML = `${keyHint}${typeLabel}`;
         contextButton.textContent = nearest.interactionType === "door" ? t("hud.enter", "ENTER") : t("hud.action", "ACTION");
       } else {
-        const districtName = state.districts.find((d) => d.id === state.selectedDistrictId)?.name || "CITY";
-        const locationName = LOCATIONS[state.currentLocationId]?.name || state.currentLocationId;
-        promptNode.textContent = `${districtName} · ${locationName} · ${t("prompt.exploreHint", "Explore and approach highlighted points")}`;
+        const locName = LOCATIONS[state.currentLocationId]?.name || distName;
+        if (interactIcon)   interactIcon.textContent = "🧭";
+        if (interactTarget) interactTarget.textContent = locName;
+        if (interactHint)   interactHint.textContent = t("prompt.exploreHint", "Approach marked points of interest");
         contextButton.textContent = t("hud.action", "ACTION");
       }
 

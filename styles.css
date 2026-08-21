@@ -898,3 +898,373 @@ input[type="range"] {
     padding: 0.52rem 0.18rem;
   }
 }
+
+/* ════════════════════════════════════════════════════════════════
+   PREMIUM HUD v2 — health/energy/xp bars · wanted stars · badges
+   ════════════════════════════════════════════════════════════════ */
+
+.hud-panel {
+  position: absolute;
+  top: calc(env(safe-area-inset-top, 0px) + 0.46rem);
+  min-width: 148px;
+  padding: 0.46rem 0.6rem;
+  border-radius: var(--r-sm);
+  border: 1px solid rgba(196, 169, 106, 0.2);
+  background: rgba(5, 6, 12, 0.76);
+  font-size: 0.7rem;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: 0 4px 18px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.03);
+  pointer-events: none;
+}
+
+.hud-left  { left: 0.5rem; }
+.hud-right { right: 0.5rem; text-align: right; min-width: 120px; }
+
+.hud-name {
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--gold);
+  text-transform: uppercase;
+  margin-bottom: 0.24rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 138px;
+}
+
+.hud-row {
+  display: flex;
+  align-items: center;
+  gap: 0.28rem;
+  margin: 0.17rem 0;
+}
+
+.hud-ico {
+  font-size: 0.68rem;
+  width: 1rem;
+  text-align: center;
+  flex-shrink: 0;
+  color: #e07070;
+  line-height: 1;
+}
+.hud-ico-en { color: #5dc8f0; }
+.hud-ico-xp { color: var(--gold); }
+
+.hud-bar-track {
+  flex: 1;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255,255,255,0.07);
+  overflow: hidden;
+  min-width: 52px;
+}
+
+.hud-bar-fill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.35s ease;
+  will-change: width;
+}
+
+.hud-hp { background: linear-gradient(90deg, #b82040, #f04060); }
+.hud-en { background: linear-gradient(90deg, #1858be, #38a8e8); }
+.hud-xp { background: linear-gradient(90deg, var(--gold-soft), var(--gold)); }
+
+.hud-val {
+  font-size: 0.6rem;
+  font-weight: 700;
+  color: var(--silver);
+  min-width: 1.7rem;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.hud-lvl {
+  font-size: 0.58rem;
+  color: var(--gold);
+  min-width: 2rem;
+  text-align: right;
+}
+
+/* Right HUD panel */
+.hud-cash {
+  font-size: 0.9rem;
+  font-weight: 800;
+  color: var(--gold);
+  letter-spacing: 0.02em;
+  text-shadow: 0 0 14px rgba(196,169,106,0.32);
+  margin-bottom: 0.18rem;
+}
+
+.hud-wanted {
+  display: flex;
+  justify-content: flex-end;
+  gap: 2px;
+  margin: 0.14rem 0;
+}
+
+.hud-wanted-star {
+  font-size: 0.68rem;
+  color: rgba(255,255,255,0.13);
+  transition: color 0.18s ease, text-shadow 0.18s ease;
+  line-height: 1;
+}
+
+.hud-wanted-star.lit {
+  color: #e02840;
+  text-shadow: 0 0 6px rgba(224,40,64,0.55);
+}
+
+.hud-rep {
+  font-size: 0.6rem;
+  color: var(--silver);
+  letter-spacing: 0.04em;
+  margin-top: 0.08rem;
+}
+
+/* Top-center badges: district + time + weather */
+.hud-badge-row {
+  display: flex;
+  align-items: center;
+  gap: 0.28rem;
+  flex-wrap: nowrap;
+}
+
+.hud-badge {
+  padding: 0.16rem 0.42rem;
+  border-radius: var(--r-pill);
+  border: 1px solid rgba(196,169,106,0.26);
+  background: rgba(5,6,12,0.75);
+  color: var(--silver);
+  font-size: 0.6rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  backdrop-filter: blur(4px);
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.hud-badge-district {
+  color: var(--gold);
+  border-color: rgba(196,169,106,0.4);
+}
+
+.hud-hidden { display: none !important; }
+
+/* ── Premium Interaction Prompt ─────────────────────────────── */
+.interact-panel {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(8.8rem + env(safe-area-inset-bottom, 0px));
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.5rem 0.82rem;
+  border-radius: var(--r-sm);
+  border: 1px solid rgba(196,169,106,0.48);
+  background: rgba(7,5,13,0.84);
+  backdrop-filter: blur(7px);
+  -webkit-backdrop-filter: blur(7px);
+  pointer-events: none;
+  max-width: min(92vw, 400px);
+  box-shadow: 0 0 24px rgba(196,169,106,0.07);
+  transition: border-color 0.22s ease;
+}
+
+.interact-panel.prompt-flash {
+  animation: prompt-flash 1.8s ease forwards;
+}
+
+.interact-icon {
+  font-size: 1.25rem;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.interact-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.04rem;
+  min-width: 0;
+}
+
+.interact-target {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--gold);
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 230px;
+}
+
+.interact-hint {
+  font-size: 0.6rem;
+  color: var(--silver);
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.interact-key {
+  display: inline-block;
+  padding: 0.08rem 0.32rem;
+  border-radius: 3px;
+  border: 1px solid rgba(196,169,106,0.55);
+  background: rgba(196,169,106,0.1);
+  color: var(--gold);
+  font-size: 0.58rem;
+  font-weight: 700;
+  margin-right: 0.18rem;
+}
+
+/* ── SVG City Map ────────────────────────────────────────────── */
+.city-map-panel {
+  background: linear-gradient(160deg, #0a0c14, #0d0f1a);
+  border-radius: var(--r-lg);
+  border: 1px solid var(--border-subtle);
+  overflow: hidden;
+  margin-bottom: 0.75rem;
+  padding: 0;
+}
+
+.city-map-title {
+  padding: 0.55rem 0.85rem 0.35rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--gold);
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.city-map-svg-wrap {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 5 / 3;
+  overflow: hidden;
+  background: #090a10;
+}
+
+.city-map-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.map-district-btn {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  min-height: unset;
+  height: auto;
+  padding: 0.22rem 0.5rem;
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  border-radius: var(--r-pill);
+  border: 1px solid rgba(196,169,106,0.35);
+  background: rgba(6,7,14,0.82);
+  color: var(--silver);
+  backdrop-filter: blur(3px);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: border-color 0.18s ease, color 0.18s ease, background 0.18s ease;
+  pointer-events: auto;
+  z-index: 2;
+}
+
+.map-district-btn:hover:not(:disabled) {
+  border-color: rgba(196,169,106,0.7);
+  color: var(--gold);
+  background: rgba(18,12,28,0.9);
+}
+
+.map-district-btn.active {
+  border-color: var(--gold);
+  color: var(--gold);
+  background: rgba(20,14,32,0.88);
+  box-shadow: 0 0 10px rgba(196,169,106,0.15);
+}
+
+.map-district-btn.locked {
+  opacity: 0.4;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.map-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.28rem;
+  padding: 0.45rem 0.72rem;
+  border-top: 1px solid var(--border-subtle);
+  background: rgba(0,0,0,0.2);
+}
+
+.map-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 0.22rem;
+  font-size: 0.58rem;
+  color: var(--silver);
+}
+
+.map-legend-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+@keyframes player-pulse {
+  0%   { opacity: 0.9; transform: scale(1); }
+  50%  { opacity: 0.4; transform: scale(1.6); }
+  100% { opacity: 0.9; transform: scale(1); }
+}
+
+.map-player-ring {
+  transform-origin: center;
+  transform-box: fill-box;
+  animation: player-pulse 2s ease-in-out infinite;
+}
+
+/* ── Enhanced viewport for tablets/desktop ──────────────────── */
+@media (min-width: 1280px) {
+  .city-world-stage { height: 700px; }
+  .hud-panel { min-width: 160px; }
+}
+
+@media (min-width: 1600px) {
+  .city-world-stage { height: 800px; }
+}
+
+/* Keep gameplay-mode stage always full height on all screens */
+.gameplay-mode .city-world-stage {
+  height: 100dvh !important;
+}
+
+/* ── Interior rooms ──────────────────────────────────────────── */
+.city-interior-banner {
+  position: absolute;
+  z-index: 5;
+  top: calc(env(safe-area-inset-top, 0px) + 0.38rem);
+  left: 50%;
+  transform: translateX(-50%);
+  border-radius: var(--r-pill);
+  font-size: 0.64rem;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  padding: 0.22rem 0.72rem;
+  border: 1px solid rgba(196,169,106,0.48);
+  background: rgba(7,8,13,0.84);
+  color: var(--gold);
+  backdrop-filter: blur(5px);
+  pointer-events: none;
+  white-space: nowrap;
+}
